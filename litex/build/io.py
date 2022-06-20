@@ -58,7 +58,7 @@ class SDRIO(Special):
         self.i            = wrap(i)
         self.o            = wrap(o)
         self.clk          = wrap(clk)
-        self.clk_domain   = None if not hasattr(clk, "cd") else clk.cd
+        self.clk_domain = clk.cd if hasattr(clk, "cd") else None
 
     def iter_expressions(self):
         yield self, "i",   SPECIAL_INPUT

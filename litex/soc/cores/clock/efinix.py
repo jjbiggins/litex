@@ -25,10 +25,10 @@ class EFINIXPLL(Module):
         elif version == "V3":
             self.type = "TITANIUMPLL"
         else:
-            self.logger.error("PLL version {} not supported".format(version))
+            self.logger.error(f"PLL version {version} not supported")
             quit()
 
-        self.logger.info("Creating {}".format(colorer(self.type, color="green")))
+        self.logger.info(f'Creating {colorer(self.type, color="green")}')
         self.platform   = platform
         self.nclkouts   = 0
         self.reset      = Signal()
@@ -36,18 +36,20 @@ class EFINIXPLL(Module):
         self.name       = f"pll{n}"
 
         # Create PLL block.
-        block = {}
-        block["type"]    = "PLL"
-        block["name"]    = self.name
-        block["clk_out"] = []
-        block["locked"]  = self.name + "_locked"
-        block["rstn"]    = self.name + "_rstn"
-        block["version"] = version
+        block = {
+            "type": "PLL",
+            "name": self.name,
+            "clk_out": [],
+            "locked": f"{self.name}_locked",
+            "rstn": f"{self.name}_rstn",
+            "version": version,
+        }
+
         self.platform.toolchain.ifacewriter.blocks.append(block)
 
         # Connect PLL's rstn/locked.
-        self.comb += self.platform.add_iface_io(self.name + "_rstn").eq(~self.reset)
-        self.comb += self.locked.eq(self.platform.add_iface_io(self.name + "_locked"))
+        self.comb += self.platform.add_iface_io(f"{self.name}_rstn").eq(~self.reset)
+        self.comb += self.locked.eq(self.platform.add_iface_io(f"{self.name}_locked"))
 
     def register_clkin(self, clkin, freq, name=""):
         block = self.platform.toolchain.ifacewriter.get_block(self.name)
@@ -70,27 +72,30 @@ class EFINIXPLL(Module):
             try:
                 (pll_res, clock_no) = self.platform.parser.get_pll_inst_from_pin(pad_name)
             except:
-                self.logger.error("Cannot find a pll with {} as input".format(pad_name))
+                self.logger.error(f"Cannot find a pll with {pad_name} as input")
                 quit()
 
             block["input_clock"]     = "EXTERNAL"
             block["input_clock_pad"] = pin_name
             block["resource"]        = pll_res
             block["clock_no"]        = clock_no
-            self.logger.info("Clock source: {}, using EXT_CLK{}".format(block["input_clock"], clock_no))
+            self.logger.info(
+                f'Clock source: {block["input_clock"]}, using EXT_CLK{clock_no}'
+            )
+
             self.platform.get_pll_resource(pll_res)
         else:
             block["input_clock"]  = "INTERNAL"
             block["resource"]     = self.platform.get_free_pll_resource()
             block["input_signal"] = name
-            self.logger.info("Clock source: {}".format(block["input_clock"]))
+            self.logger.info(f'Clock source: {block["input_clock"]}')
 
         self.logger.info("PLL used     : " + colorer(str(self.platform.pll_used), "cyan"))
         self.logger.info("PLL available: " + colorer(str(self.platform.pll_available), "cyan"))
 
         block["input_freq"] = freq
 
-        self.logger.info("Use {}".format(colorer(block["resource"], "green")))
+        self.logger.info(f'Use {colorer(block["resource"], "green")}')
 
     def create_clkout(self, cd, freq, phase=0, margin=0, name="", with_reset=True):
         assert self.nclkouts < self.nclkouts_max

@@ -44,18 +44,19 @@ class XilinxPlatform(GenericPlatform):
     def add_platform_command(self, command, **signals):
         skip = False
         from litex.build.xilinx import yosys_nextpnr
-        if isinstance(self.toolchain, yosys_nextpnr.YosysNextpnrToolchain):
-            # FIXME: Add support for INTERNAL_VREF to yosys+nextpnr flow.
-            if "set_property INTERNAL_VREF" in command:
-                print("WARNING: INTERNAL_VREF constraint removed since not yet supported by yosys-nextpnr flow.")
-                skip = True
+        if (
+            isinstance(self.toolchain, yosys_nextpnr.YosysNextpnrToolchain)
+            and "set_property INTERNAL_VREF" in command
+        ):
+            print("WARNING: INTERNAL_VREF constraint removed since not yet supported by yosys-nextpnr flow.")
+            skip = True
         if not skip:
             GenericPlatform.add_platform_command(self, command, **signals)
 
     def get_verilog(self, *args, special_overrides=dict(), **kwargs):
         so = dict(common.xilinx_special_overrides)
         if self.device[:3] == "xc6":
-            so.update(common.xilinx_s6_special_overrides)
+            so |= common.xilinx_s6_special_overrides
         if self.device[:3] == "xc7":
             so.update(common.xilinx_s7_special_overrides)
         if self.device[:4] == "xcku":

@@ -68,13 +68,7 @@ class OpenOCD(GenericProgrammer):
     def get_endstate(self, config):
         cfg_str = open(config).read()
         # Lattice ECP5.
-        if "ecp5" in cfg_str:
-            return "-endstate DRPAUSE" # CHECKME: Can we avoid it?
-        # Intel Max10.
-        elif "10m50" in cfg_str:
-            return "-endstate DRPAUSE" # CHECKME: Is it required on Intel?
-        else:
-            return ""
+        return "-endstate DRPAUSE" if "ecp5" in cfg_str or "10m50" in cfg_str else ""
 
     def stream(self, port=20000, chain=1):
         """

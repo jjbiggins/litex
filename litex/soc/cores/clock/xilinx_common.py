@@ -64,7 +64,7 @@ class XilinxClocking(Module, AutoCSR):
             elif buf == "bufio":
                 self.specials += Instance("BUFIO", i_I=clkout, o_O=clkout_buf)
             else:
-                raise ValueError("Unsupported clock buffer: {}".format(buf))
+                raise ValueError(f"Unsupported clock buffer: {buf}")
         create_clkout_log(self.logger, cd.name, freq, margin, self.nclkouts)
         self.nclkouts += 1
 
@@ -81,15 +81,18 @@ class XilinxClocking(Module, AutoCSR):
                     for n, (clk, f, p, m) in sorted(self.clkouts.items()):
                         valid = False
                         d_ranges = [self.clkout_divide_range]
-                        if getattr(self, "clkout{}_divide_range".format(n), None) is not None:
-                            d_ranges += [getattr(self, "clkout{}_divide_range".format(n))]
+                        if (
+                            getattr(self, f"clkout{n}_divide_range", None)
+                            is not None
+                        ):
+                            d_ranges += [getattr(self, f"clkout{n}_divide_range")]
                         for d_range in d_ranges:
                             for d in clkdiv_range(*d_range):
                                 clk_freq = vco_freq/d
                                 if abs(clk_freq - f) <= f*m:
-                                    config["clkout{}_freq".format(n)]   = clk_freq
-                                    config["clkout{}_divide".format(n)] = d
-                                    config["clkout{}_phase".format(n)]  = p
+                                    config[f"clkout{n}_freq"] = clk_freq
+                                    config[f"clkout{n}_divide"] = d
+                                    config[f"clkout{n}_phase"] = p
                                     valid = True
                                     break
                                 if valid:
@@ -143,7 +146,7 @@ class XilinxClocking(Module, AutoCSR):
         self.logger.info("Exposing DRP interface.")
 
     def add_reset_delay(self, cycles):
-        for i in range(cycles):
+        for _ in range(cycles):
             reset = Signal()
             self.specials += Instance("FDCE", i_C=self.clkin, i_CE=1, i_CLR=0, i_D=self.reset, o_Q=reset)
             self.reset = reset

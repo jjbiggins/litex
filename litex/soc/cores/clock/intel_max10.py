@@ -21,7 +21,7 @@ class Max10PLL(IntelClocking):
     vco_freq_range       = (600e6, 1300e6)
     def __init__(self, speedgrade="-6"):
         self.logger = logging.getLogger("Max10PLL")
-        self.logger.info("Creating Max10PLL, {}.".format(colorer("speedgrade {}".format(speedgrade))))
+        self.logger.info(f'Creating Max10PLL, {colorer(f"speedgrade {speedgrade}")}.')
         IntelClocking.__init__(self)
         self.clko_freq_range = {
             "-6" : (0e6, 472.5e6),

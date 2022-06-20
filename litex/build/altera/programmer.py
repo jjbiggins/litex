@@ -16,8 +16,14 @@ class USBBlaster(GenericProgrammer):
         self.device_id  = device_id
 
     def load_bitstream(self, bitstream_file, cable_suffix=""):
-        self.call(["quartus_pgm",
-            "-m", "jtag",
-             "-c", "{}{}".format(self.cable_name, cable_suffix),
-             "-o", "p;{}@{}".format(bitstream_file, self.device_id)
-        ])
+        self.call(
+            [
+                "quartus_pgm",
+                "-m",
+                "jtag",
+                "-c",
+                f"{self.cable_name}{cable_suffix}",
+                "-o",
+                f"p;{bitstream_file}@{self.device_id}",
+            ]
+        )

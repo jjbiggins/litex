@@ -28,14 +28,16 @@ def colorer(s, color="bright"): # FIXME: Move colorer to litex.common?
     return header + str(s) + trailer
 
 def print_banner():
-    b  = []
-    b.append("          __   _ __      _  __         ")
-    b.append("         / /  (_) /____ | |/_/         ")
-    b.append("        / /__/ / __/ -_)>  <           ")
-    b.append("       /____/_/\\__/\\__/_/|_|         ")
-    b.append("     Build your hardware, easily!      ")
-    b.append("          LiteX Setup utility.         ")
-    b.append("")
+    b = [
+        "          __   _ __      _  __         ",
+        "         / /  (_) /____ | |/_/         ",
+        "        / /__/ / __/ -_)>  <           ",
+        "       /____/_/\\__/\\__/_/|_|         ",
+        "     Build your hardware, easily!      ",
+        "          LiteX Setup utility.         ",
+        "",
+    ]
+
     print("\n".join(b))
 
 def print_status(status, underline=False):
@@ -185,7 +187,7 @@ def litex_setup_auto_update():
 # Git helpers --------------------------------------------------------------------------------------
 
 def git_checkout(sha1=None, tag=None):
-    assert not ((sha1 is None) and (tag is None))
+    assert sha1 is not None or tag is not None
     if sha1 is not None:
         os.system(f"git checkout {sha1:07x}")
     if tag is not None:
@@ -241,7 +243,7 @@ def litex_setup_update_repos(config="standard", tag=None):
         # Update Repo.
         print_status(f"Updating {name} Git repository...")
         os.chdir(os.path.join(current_path, name))
-        subprocess.check_call("git checkout " + repo.branch, shell=True)
+        subprocess.check_call(f"git checkout {repo.branch}", shell=True)
         subprocess.check_call("git pull --ff-only", shell=True)
         # Recursive Update (Optional).
         if repo.clone == "recursive":
@@ -275,10 +277,9 @@ def litex_setup_install_repos(config="standard", user_mode=False):
                 python3 = sys.executable,
                 options = "--user" if user_mode else "",
                 ), shell=True)
-    if user_mode:
-        if ".local/bin" not in os.environ.get("PATH", ""):
-            print_status("Make sure that ~/.local/bin is in your PATH")
-            print_status("export PATH=$PATH:~/.local/bin")
+    if user_mode and ".local/bin" not in os.environ.get("PATH", ""):
+        print_status("Make sure that ~/.local/bin is in your PATH")
+        print_status("export PATH=$PATH:~/.local/bin")
 
 # Git repositories freeze --------------------------------------------------------------------------
 

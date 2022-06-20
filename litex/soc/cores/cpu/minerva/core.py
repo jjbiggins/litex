@@ -36,8 +36,7 @@ class Minerva(CPU):
     # GCC Flags.
     @property
     def gcc_flags(self):
-        flags =  "-march=rv32im "
-        flags += "-mabi=ilp32 "
+        flags = "-march=rv32im " + "-mabi=ilp32 "
         flags += "-D__minerva__ "
         return flags
 
@@ -95,16 +94,14 @@ class Minerva(CPU):
 
     @staticmethod
     def elaborate(reset_address, with_icache, with_dcache, with_muldiv, verilog_filename):
-        cli_params = []
-        cli_params.append("--reset-addr={}".format(reset_address))
+        cli_params = [f"--reset-addr={reset_address}"]
         if with_icache:
             cli_params.append("--with-icache")
         if with_dcache:
             cli_params.append("--with-dcache")
         if with_muldiv:
             cli_params.append("--with-muldiv")
-        cli_params.append("generate")
-        cli_params.append("--type=v")
+        cli_params.extend(("generate", "--type=v"))
         sdir = get_data_mod("cpu", "minerva").data_location
         if subprocess.call(["python3", os.path.join(sdir, "cli.py"), *cli_params],
             stdout=open(verilog_filename, "w")):

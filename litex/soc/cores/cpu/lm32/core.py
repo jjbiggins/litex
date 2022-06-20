@@ -38,8 +38,7 @@ class LM32(CPU):
     # GCC Flags.
     @property
     def gcc_flags(self):
-        flags =  "-mbarrel-shift-enabled "
-        flags += "-mmultiply-enabled "
+        flags = "-mbarrel-shift-enabled " + "-mmultiply-enabled "
         flags += "-mdivide-enabled "
         flags += "-msign-extend-enabled "
         flags += "-D__lm32__ "
@@ -134,7 +133,7 @@ class LM32(CPU):
         elif variant == "standard":
             platform.add_verilog_include_path(os.path.join(cdir, "config"))
         else:
-            raise TypeError("Unknown variant {}".format(variant))
+            raise TypeError(f"Unknown variant {variant}")
 
     def do_finalize(self):
         assert hasattr(self, "reset_address")

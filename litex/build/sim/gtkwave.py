@@ -87,12 +87,10 @@ class GTKWSave:
 
     def __exit__(self, type, value, traceback):
         self.file.close()
-        print("\nGenerated GTKWave save file at: {}\n".format(self.savefile))
+        print(f"\nGenerated GTKWave save file at: {self.savefile}\n")
 
     def name(self, sig: Signal) -> str:
-        bits = ""
-        if len(sig) > 1:
-            bits = "[{}:0]".format(len(sig) - 1)
+        bits = f"[{len(sig) - 1}:0]" if len(sig) > 1 else ""
         return self.vns.get_name(sig) + bits
 
     def signal(self, signal: Signal):
@@ -122,8 +120,9 @@ class GTKWSave:
         make_alias = (lambda n: n[len(common):]) if alias else (lambda n: n)
         sigs = [
             SigTrace(name=n, signal=s, alias=make_alias(n))
-            for i, (s, n) in enumerate(zip(signals, names))
+            for s, n in zip(signals, names)
         ]
+
 
         for sig, file in zip(sigs, translation_files):
             sig.filter_file = file
@@ -141,7 +140,7 @@ class GTKWSave:
         signals = list(filter(
             lambda sig: pattern.search(self.vns.pnd[sig]),
             self.vns.pnd.keys()))
-        assert len(signals) > 0, "No match found for {}".format(regex)
+        assert signals, f"No match found for {regex}"
         return self.group(signals, **kwargs)
 
     def clocks(self, **kwargs):
@@ -179,7 +178,7 @@ class GTKWSave:
         # generate filter file
         from vcd.gtkw import make_translation_filter
         translations = list(fsm.decoding.items())
-        filename = "filter__{}.txt".format(self._strip_bits(self.name(fsm.state)))
+        filename = f"filter__{self._strip_bits(self.name(fsm.state))}.txt"
         filepath = os.path.join(self.filtersdir, filename)
         with open(filepath, 'w') as f:
             f.write(make_translation_filter(translations, size=len(fsm.state)))
@@ -200,7 +199,7 @@ class GTKWSave:
                 continue
             if name == "subfragments":
                 break
-            alias = "{}{}_{}".format(name, num, alias)
+            alias = f"{name}{num}_{alias}"
         return alias.strip("_")
 
     def fsm_states(self, soc: Module, alias: bool = True, **kwargs):
@@ -250,10 +249,10 @@ def _regex_map(
     return on_no_match(sig)
 
 def suffixes2re(strings: Sequence[str]) -> Sequence[Regex]:
-    return ["{}$".format(s) for s in strings]
+    return [f"{s}$" for s in strings]
 
 def prefixes2re(strings: Sequence[str]) -> Sequence[Regex]:
-    return ["^{}".format(s) for s in strings]
+    return [f"^{s}" for s in strings]
 
 def strings2re(strings: Sequence[str]) -> Sequence[Regex]:
     return suffixes2re(prefixes2re(strings))
@@ -263,10 +262,13 @@ def regex_filter(patterns: Sequence[Regex], negate: bool = False, **kwargs) -> S
     patterns = list(map(re.compile, patterns))
     def filt(sigs):
         def map_sig(sig):
-            return _regex_map(sig, patterns,
-                on_match = lambda s, p: (s if not negate else None),
-                on_no_match = lambda s: (None if not negate else s),
-                **kwargs)
+            return _regex_map(
+                sig,
+                patterns,
+                on_match=lambda s, p: None if negate else s,
+                on_no_match=lambda s: s if negate else None,
+                **kwargs
+            )
         return list(filter(None, map(map_sig, sigs)))
     return filt
 
@@ -327,7 +329,7 @@ def dfi_sorter(phases: bool = True, nphases_max: int = 8, **kwargs) -> SigMapper
     if phases:
         patterns = []
         for phase in range(nphases_max):
-            patterns.extend(["p{}_{}".format(phase, suffix) for suffix in suffixes])
+            patterns.extend([f"p{phase}_{suffix}" for suffix in suffixes])
     else:
         patterns = suffixes
     return regex_sorter(suffixes2re(patterns), **kwargs)
@@ -338,7 +340,7 @@ def dfi_per_phase_colorer(nphases_max: int = 8, **kwargs) -> SigMapper:
     for p in range(nphases_max):
         color = colors[p % len(colors)]
         patterns = color_patterns.get(color, [])
-        patterns.append("p{}_".format(p))
+        patterns.append(f"p{p}_")
         color_patterns[color] = patterns
     return regex_colorer(color_patterns, default="indigo", **kwargs)
 

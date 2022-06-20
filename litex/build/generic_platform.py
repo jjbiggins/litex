@@ -30,13 +30,10 @@ class Pins:
     def __init__(self, *identifiers):
         self.identifiers = []
         for i in identifiers:
-            if isinstance(i, int):
-                self.identifiers += ["X"]*i
-            else:
-                self.identifiers += i.split()
+            self.identifiers += ["X"]*i if isinstance(i, int) else i.split()
 
     def __repr__(self):
-        return "{}('{}')".format(self.__class__.__name__, " ".join(self.identifiers))
+        return f"""{self.__class__.__name__}('{" ".join(self.identifiers)}')"""
 
 
 class IOStandard:
@@ -44,7 +41,7 @@ class IOStandard:
         self.name = name
 
     def __repr__(self):
-        return "{}('{}')".format(self.__class__.__name__, self.name)
+        return f"{self.__class__.__name__}('{self.name}')"
 
 
 class Drive:
@@ -52,7 +49,7 @@ class Drive:
         self.strength = strength
 
     def __repr__(self):
-        return "{}('{}')".format(self.__class__.__name__, self.strength)
+        return f"{self.__class__.__name__}('{self.strength}')"
 
 
 class Misc:
@@ -60,12 +57,12 @@ class Misc:
         self.misc = misc
 
     def __repr__(self):
-        return "{}({})".format(self.__class__.__name__, repr(self.misc))
+        return f"{self.__class__.__name__}({repr(self.misc)})"
 
 
 class Inverted:
     def __repr__(self):
-        return "{}()".format(self.__class__.__name__)
+        return f"{self.__class__.__name__}()"
 
 
 
@@ -75,9 +72,7 @@ class Subsignal:
         self.constraints = list(constraints)
 
     def __repr__(self):
-        return "{}('{}', {})".format(self.__class__.__name__,
-            self.name,
-            ", ".join([repr(constr) for constr in self.constraints]))
+        return f"""{self.__class__.__name__}('{self.name}', {", ".join([repr(constr) for constr in self.constraints])})"""
 
 # Platform -----------------------------------------------------------------------------------------
 
@@ -86,7 +81,7 @@ class PlatformInfo:
         self.info = info
 
     def __repr__(self):
-        return "{}({})".format(self.__class__.__name__, repr(self.info))
+        return f"{self.__class__.__name__}({repr(self.info)})"
 
 
 def _lookup(description, name, number, loose=True):
@@ -96,7 +91,7 @@ def _lookup(description, name, number, loose=True):
     if loose:
         return None
     else:
-        raise ConstraintError("Resource not found: {}:{}".format(name, number))
+        raise ConstraintError(f"Resource not found: {name}:{number}")
 
 
 def _resource_type(resource):
@@ -131,7 +126,7 @@ def _resource_type(resource):
 
 class ConnectorManager:
     def __init__(self, connectors):
-        self.connector_table = dict()
+        self.connector_table = {}
         for connector in connectors:
             cit       = iter(connector)
             conn_name = next(cit)
@@ -143,11 +138,12 @@ class ConnectorManager:
             elif isinstance(connector[1], dict):
                 pin_list = connector[1]
             else:
-                raise ValueError("Unsupported pin list type {} for connector"
-                                 " {}".format(type(connector[1]), conn_name))
-            if conn_name in self.connector_table:
                 raise ValueError(
-                    "Connector specified more than once: {}".format(conn_name))
+                    f"Unsupported pin list type {type(connector[1])} for connector {conn_name}"
+                )
+
+            if conn_name in self.connector_table:
+                raise ValueError(f"Connector specified more than once: {conn_name}")
 
             self.connector_table[conn_name] = pin_list
 
@@ -198,10 +194,7 @@ class ConstraintManager:
         if resource is None:
             return None
         rt, ri = _resource_type(resource)
-        if number is None:
-            resource_name = name
-        else:
-            resource_name = name + str(number)
+        resource_name = name if number is None else name + str(number)
         if isinstance(rt, int):
             obj = Signal(rt, name_override=resource_name)
         else:
@@ -211,9 +204,8 @@ class ConstraintManager:
                     getattr(obj, name).inverted = True
 
         for element in resource[2:]:
-            if isinstance(element, Inverted):
-                if isinstance(obj, Signal):
-                    obj.inverted = True
+            if isinstance(element, Inverted) and isinstance(obj, Signal):
+                obj.inverted = True
             if isinstance(element, PlatformInfo):
                 obj.platform_info = element.info
                 break
@@ -250,15 +242,11 @@ class ConstraintManager:
         for resource, obj in self.matched:
             if resource[0] == name and (number is None or
                                         resource[1] == number):
-                if subname is not None:
-                    return getattr(obj, subname)
-                else:
-                    return obj
-
+                return getattr(obj, subname) if subname is not None else obj
         if loose:
             return None
         else:
-            raise ConstraintError("Resource not found: {}:{}".format(name, number))
+            raise ConstraintError(f"Resource not found: {name}:{number}")
 
     def add_platform_command(self, command, **signals):
         self.platform_commands.append((command, signals))
@@ -288,15 +276,15 @@ class ConstraintManager:
 
             if has_subsignals:
                 for element in resource[2:]:
-                    if isinstance(element, Subsignal):
-                        # Because we could have removed one Signal From the record
-                        if hasattr(obj, element.name):
-                            sig = getattr(obj, element.name)
-                            pins, others = _separate_pins(top_constraints +
-                                                        element.constraints)
-                            pins = self.connector_manager.resolve_identifiers(pins)
-                            r.append((sig, pins, others,
-                                    (name, number, element.name)))
+                    if isinstance(element, Subsignal) and hasattr(
+                        obj, element.name
+                    ):
+                        sig = getattr(obj, element.name)
+                        pins, others = _separate_pins(top_constraints +
+                                                    element.constraints)
+                        pins = self.connector_manager.resolve_identifiers(pins)
+                        r.append((sig, pins, others,
+                                (name, number, element.name)))
             else:
                 pins, others = _separate_pins(top_constraints)
                 pins = self.connector_manager.resolve_identifiers(pins)
@@ -403,12 +391,14 @@ class GenericPlatform:
         dir_files = []
         if recursive:
             for root, dirs, files in os.walk(path):
-                for filename in files:
-                    dir_files.append(os.path.join(root, filename))
+                dir_files.extend(os.path.join(root, filename) for filename in files)
         else:
-            for item in os.listdir(path):
-                if os.path.isfile(os.path.join(path, item)):
-                    dir_files.append(os.path.join(path, item))
+            dir_files.extend(
+                os.path.join(path, item)
+                for item in os.listdir(path)
+                if os.path.isfile(os.path.join(path, item))
+            )
+
         for filename in dir_files:
             _language = language
             if _language is None:
@@ -428,7 +418,7 @@ class GenericPlatform:
         pc = self.constraint_manager.get_platform_commands()
         named_pc = []
         for template, args in pc:
-            name_dict = dict((k, vns.get_name(sig)) for k, sig in args.items())
+            name_dict = {k: vns.get_name(sig) for k, sig in args.items()}
             named_pc.append(template.format(**name_dict))
 
         return named_sc, named_pc

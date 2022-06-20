@@ -29,7 +29,7 @@ class AlteraPlatform(GenericPlatform):
 
     def get_verilog(self, *args, special_overrides=dict(), **kwargs):
         so = dict(common.altera_special_overrides)
-        so.update(special_overrides)
+        so |= special_overrides
         return GenericPlatform.get_verilog(self, *args,
             special_overrides = so,
             attr_translate    = self.toolchain.attr_translate,
@@ -56,7 +56,4 @@ class AlteraPlatform(GenericPlatform):
         self.add_extension([*[(pad, 0, Pins(pad)) for pad in common.altera_reserved_jtag_pads]])
 
     def get_reserved_jtag_pads(self):
-        r = {}
-        for pad in common.altera_reserved_jtag_pads:
-            r[pad] = self.request(pad)
-        return r
+        return {pad: self.request(pad) for pad in common.altera_reserved_jtag_pads}

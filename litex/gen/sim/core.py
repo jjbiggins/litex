@@ -104,8 +104,8 @@ class Evaluator:
     def __init__(self, clock_domains, replaced_memories):
         self.clock_domains = clock_domains
         self.replaced_memories = replaced_memories
-        self.signal_values = dict()
-        self.modifications = dict()
+        self.signal_values = {}
+        self.modifications = {}
 
     def commit(self):
         r = set()
@@ -132,10 +132,7 @@ class Evaluator:
         elif isinstance(node, _Operator):
             operands = [self.eval(o, postcommit) for o in node.operands]
             if node.op == "-":
-                if len(operands) == 1:
-                    return -operands[0]
-                else:
-                    return operands[0] - operands[1]
+                return -operands[0] if len(operands) == 1 else operands[0] - operands[1]
             elif node.op == "m":
                 return operands[1] if operands[0] else operands[2]
             else:
@@ -167,14 +164,15 @@ class Evaluator:
             return self.eval(self.clock_domains[node.cd].clk, postcommit)
         elif isinstance(node, ResetSignal):
             rst = self.clock_domains[node.cd].rst
-            if rst is None:
-                if node.allow_reset_less:
-                    return 0
-                else:
-                    raise ValueError("Attempted to get reset signal of resetless"
-                                     " domain '{}'".format(node.cd))
-            else:
+            if rst is not None:
                 return self.eval(rst, postcommit)
+            if node.allow_reset_less:
+                return 0
+            else:
+                raise ValueError(
+                    f"Attempted to get reset signal of resetless domain '{node.cd}'"
+                )
+
         else:
             raise NotImplementedError(node)
 
@@ -267,14 +265,14 @@ class Simulator:
         mta.transform_fragment(None, self.fragment)
 
         overrides = {AsyncResetSynchronizer: DummyAsyncResetSynchronizer}
-        overrides.update(special_overrides)
+        overrides |= special_overrides
         f, lowered = lower_specials(overrides, self.fragment)
         if self.fragment.specials:
             raise ValueError("Could not lower all specials", self.fragment.specials)
 
         if not isinstance(generators, dict):
             generators = {"sys": generators}
-        self.generators = dict()
+        self.generators = {}
         self.passive_generators = set()
         for k, v in generators.items():
             if (isinstance(v, collections.abc.Iterable)
@@ -362,8 +360,7 @@ class Simulator:
                         elif request == "active":
                             self.passive_generators.discard(generator)
                         else:
-                            raise ValueError("Unknown simulator command: '{}'"
-                                             .format(request))
+                            raise ValueError(f"Unknown simulator command: '{request}'")
                     else:
                         reply = self._evalexec_nested_lists(request)
                 except StopIteration:
@@ -373,10 +370,10 @@ class Simulator:
             self.generators[cd].remove(generator)
 
     def _continue_simulation(self):
-        for cd_generators in self.generators.values():
-            if set(cd_generators) - self.passive_generators:
-                return True
-        return False
+        return any(
+            set(cd_generators) - self.passive_generators
+            for cd_generators in self.generators.values()
+        )
 
     def run(self):
         self.evaluator.execute(self.fragment.comb)

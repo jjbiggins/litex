@@ -27,7 +27,7 @@ class iCE40PLL(Module):
     def __init__(self, primitive="SB_PLL40_CORE"):
         assert primitive in ["SB_PLL40_CORE", "SB_PLL40_PAD"]
         self.logger = logging.getLogger("iCE40PLL")
-        self.logger.info("Creating iCE40PLL, {} primitive.".format(colorer(primitive)))
+        self.logger.info(f"Creating iCE40PLL, {colorer(primitive)} primitive.")
         self.primitive  = primitive
         self.reset      = Signal()
         self.locked     = Signal()
@@ -95,8 +95,8 @@ class iCE40PLL(Module):
     def do_finalize(self):
         config = self.compute_config()
         clkfb = Signal()
+        pfd_freq = self.clkin_freq/(config["divr"] + 1)
         for f, v in [(17e6, 1), (26e6, 2), (44e6, 3), (66e6, 4), (101e6, 5), (133e6, 6)]:
-            pfd_freq = self.clkin_freq/(config["divr"] + 1)
             if pfd_freq < f:
                 filter_range = v
                 break

@@ -20,7 +20,10 @@ class Cyclone10LPPLL(IntelClocking):
     vco_freq_range        = (600e6, 1300e6)
     def __init__(self, speedgrade="-C6"):
         self.logger = logging.getLogger("Cyclone10LPPLL")
-        self.logger.info("Creating Cyclone10LPPLL, {}.".format(colorer("speedgrade {}".format(speedgrade))))
+        self.logger.info(
+            f'Creating Cyclone10LPPLL, {colorer(f"speedgrade {speedgrade}")}.'
+        )
+
         IntelClocking.__init__(self)
         self.clkin_freq_range = {
             "-C6" : (5e6, 472.5e6),

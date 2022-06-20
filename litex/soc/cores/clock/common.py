@@ -23,11 +23,13 @@ def register_clkin_log(logger, clkin, freq):
     ))
 
 def create_clkout_log(logger, name, freq, margin, nclkouts):
-    logger.info("Creating {} of {} {}.".format(
-        colorer("ClkOut{} {}".format(nclkouts, name)),
-        colorer("{:3.2f}MHz".format(freq/1e6)),
-        "(+-{:3.2f}ppm)".format(margin*1e6),
-    ))
+    logger.info(
+        "Creating {} of {} {}.".format(
+            colorer(f"ClkOut{nclkouts} {name}"),
+            colorer("{:3.2f}MHz".format(freq / 1e6)),
+            "(+-{:3.2f}ppm)".format(margin * 1e6),
+        )
+    )
 
 def compute_config_log(logger, config):
     log    = "Config:\n"
@@ -39,7 +41,7 @@ def compute_config_log(logger, config):
             value = "{:3.2f}MHz".format(value/1e6)
         if "phase" in name:
             value = "{:3.2f}°".format(value)
-        log += "{}{}: {}\n".format(name, " "*(length-len(name)), value)
+        log += f'{name}{" " * (length-len(name))}: {value}\n'
     log = log[:-1]
     logger.info(log)
 

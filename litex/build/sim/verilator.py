@@ -21,9 +21,7 @@ core_directory = os.path.join(sim_directory, 'core')
 
 
 def _generate_sim_h_struct(name, index, siglist):
-    content = ''
-
-    content += 'struct pad_s {}{}[] = {{\n'.format(name, index)
+    content = '' + f'struct pad_s {name}{index}[] = {{\n'
     for signame, sigbits, dummy in siglist:
         content += '    {{ (char*)"{}", {}, NULL }},\n'.format(signame, sigbits)
     content += '    { NULL, 0, NULL }\n'
@@ -53,13 +51,15 @@ void litex_sim_init(void **out);
 
 
 def _generate_sim_cpp_struct(name, index, siglist):
-    content = ''
+    content = ''.join(
+        f'    {name}{index}[{i}].signal = &sim->{sigfname};\n'
+        for i, (signame, sigbits, sigfname) in enumerate(siglist)
+    )
 
-    for i, (signame, sigbits, sigfname) in enumerate(siglist):
-        content += '    {}{}[{}].signal = &sim->{};\n'.format(name, index, i, sigfname)
 
-    idx_int = 0 if not index else int(index)
-    content += '    litex_sim_register_pads({}{}, (char*)"{}", {});\n\n'.format(name, index, name, idx_int)
+    idx_int = int(index) if index else 0
+    content += f'    litex_sim_register_pads({name}{index}, (char*)"{name}", {idx_int});\n\n'
+
 
     return content
 
@@ -107,9 +107,7 @@ extern "C" void litex_sim_init(void **out)
 
 def _generate_sim_variables(include_paths, extra_mods, extra_mods_path):
     tapcfg_dir = get_data_mod("misc", "tapcfg").data_location
-    include = ""
-    for path in include_paths:
-        include += "-I"+path+" "
+    include = "".join(f"-I{path} " for path in include_paths)
     content = """\
 SRC_DIR = {}
 INC_DIR = {}
@@ -118,9 +116,9 @@ TAPCFG_DIRECTORY = {}
 
     if extra_mods:
         modlist = " ".join(extra_mods)
-        content += "EXTRA_MOD_LIST = " + modlist + "\n"
-        content += "EXTRA_MOD_BASE_DIR = " + extra_mods_path + "\n"
-        tools.write_to_file(extra_mods_path + "/variables.mak", content)
+        content += f"EXTRA_MOD_LIST = {modlist}" + "\n"
+        content += f"EXTRA_MOD_BASE_DIR = {extra_mods_path}" + "\n"
+        tools.write_to_file(f"{extra_mods_path}/variables.mak", content)
 
     tools.write_to_file("variables.mak", content)
 
@@ -132,40 +130,44 @@ def _generate_sim_config(config):
 
 def _build_sim(build_name, sources, threads, coverage, opt_level="O3", trace_fst=False):
     makefile = os.path.join(core_directory, 'Makefile')
-    cc_srcs = []
-    for filename, language, library, *copy in sources:
-        cc_srcs.append("--cc " + filename + " ")
-    build_script_contents = """\
+    cc_srcs = [
+        f"--cc {filename} " for filename, language, library, *copy in sources
+    ]
+
+    build_script_contents = (
+        """\
 rm -rf obj_dir/
 make -C . -f {} {} {} {} {} {}
-""".format(makefile,
-    "CC_SRCS=\"{}\"".format("".join(cc_srcs)),
-    "THREADS={}".format(threads) if int(threads) > 1 else "",
-    "COVERAGE=1" if coverage else "",
-    "OPT_LEVEL={}".format(opt_level),
-    "TRACE_FST=1" if trace_fst else "",
+""".format(
+            makefile,
+            f'CC_SRCS=\"{"".join(cc_srcs)}\"',
+            f"THREADS={threads}" if int(threads) > 1 else "",
+            "COVERAGE=1" if coverage else "",
+            f"OPT_LEVEL={opt_level}",
+            "TRACE_FST=1" if trace_fst else "",
+        )
     )
-    build_script_file = "build_" + build_name + ".sh"
+
+    build_script_file = f"build_{build_name}.sh"
     tools.write_to_file(build_script_file, build_script_contents, force_unix=True)
 
 def _compile_sim(build_name, verbose):
-    build_script_file = "build_" + build_name + ".sh"
+    build_script_file = f"build_{build_name}.sh"
     p = subprocess.Popen(["bash", build_script_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output, _ = p.communicate()
     output = output.decode('utf-8')
     if p.returncode != 0:
-        error_messages = []
-        for l in output.splitlines():
-            if verbose or "error" in l.lower():
-                error_messages.append(l)
+        error_messages = [
+            l for l in output.splitlines() if verbose or "error" in l.lower()
+        ]
+
         raise OSError("Subprocess failed with {}\n{}".format(p.returncode, "\n".join(error_messages)))
     if verbose:
         print(output)
 
 def _run_sim(build_name, as_root=False, interactive=True):
-    run_script_contents = "sudo " if as_root else ""
-    run_script_contents += "obj_dir/Vsim"
-    run_script_file = "run_" + build_name + ".sh"
+    run_script_contents = ("sudo " if as_root else "") + "obj_dir/Vsim"
+    run_script_file = f"run_{build_name}.sh"
     tools.write_to_file(run_script_file, run_script_contents, force_unix=True)
     if sys.platform != "win32" and interactive:
         import termios
@@ -219,7 +221,7 @@ class SimVerilatorToolchain:
                 regular_comb = regular_comb
             )
             named_sc, named_pc = platform.resolve_signals(v_output.ns)
-            v_file = build_name + ".v"
+            v_file = f"{build_name}.v"
             v_output.write(v_file)
             platform.add_source(v_file)
 
@@ -243,16 +245,20 @@ class SimVerilatorToolchain:
             if pre_run_callback is not None:
                 pre_run_callback(v_output.ns)
             if which("verilator") is None:
-                msg = "Unable to find Verilator toolchain, please either:\n"
-                msg += "- Install Verilator.\n"
+                msg = (
+                    "Unable to find Verilator toolchain, please either:\n"
+                    + "- Install Verilator.\n"
+                )
+
                 msg += "- Add Verilator toolchain to your $PATH."
                 raise OSError(msg)
             _compile_sim(build_name, verbose)
-            run_as_root = False
-            if sim_config.has_module("ethernet") \
-               or sim_config.has_module("xgmii_ethernet") \
-               or sim_config.has_module("gmii_ethernet"):
-                run_as_root = True
+            run_as_root = bool(
+                sim_config.has_module("ethernet")
+                or sim_config.has_module("xgmii_ethernet")
+                or sim_config.has_module("gmii_ethernet")
+            )
+
             _run_sim(build_name, as_root=run_as_root, interactive=interactive)
 
         os.chdir(cwd)

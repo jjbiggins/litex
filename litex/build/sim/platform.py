@@ -29,9 +29,7 @@ class SimPlatform(GenericPlatform):
         self.trace = self.request("sim_trace")
 
     def request(self, name, number=None, loose=False):
-        index = ""
-        if number is not None:
-            index = str(number)
+        index = str(number) if number is not None else ""
         obj = GenericPlatform.request(self, name, number=number, loose=loose)
         siglist = []
         if isinstance(obj, Signal):
@@ -39,7 +37,7 @@ class SimPlatform(GenericPlatform):
         elif isinstance(obj, Record):
             for subsignal, dummy in obj.iter_flat():
                 subfname = subsignal.backtrace[-1][0]
-                prefix = "{}{}_".format(name, index)
+                prefix = f"{name}{index}_"
                 subname = subfname.split(prefix)[1]
                 siglist.append((subname, subsignal.nbits, subfname))
         self.sim_requested.append((name, index, siglist))
@@ -47,7 +45,7 @@ class SimPlatform(GenericPlatform):
 
     def get_verilog(self, *args, special_overrides=dict(), **kwargs):
         so = dict(common.sim_special_overrides)
-        so.update(special_overrides)
+        so |= special_overrides
         return GenericPlatform.get_verilog(self, *args, special_overrides=so, **kwargs)
 
     def build(self, *args, **kwargs):

@@ -17,7 +17,7 @@ class USPLL(XilinxClocking):
 
     def __init__(self, speedgrade=-1):
         self.logger = logging.getLogger("USPLL")
-        self.logger.info("Creating USPLL, {}.".format(colorer("speedgrade {}".format(speedgrade))))
+        self.logger.info(f'Creating USPLL, {colorer(f"speedgrade {speedgrade}")}.')
         XilinxClocking.__init__(self)
         self.divclk_divide_range = (1, 56+1)
         self.clkin_freq_range = {
@@ -52,9 +52,9 @@ class USPLL(XilinxClocking):
             o_CLKFBOUT      = pll_fb,
         )
         for n, (clk, f, p, m) in sorted(self.clkouts.items()):
-            self.params["p_CLKOUT{}_DIVIDE".format(n)] = config["clkout{}_divide".format(n)]
-            self.params["p_CLKOUT{}_PHASE".format(n)]  = config["clkout{}_phase".format(n)]
-            self.params["o_CLKOUT{}".format(n)]        = clk
+            self.params[f"p_CLKOUT{n}_DIVIDE"] = config[f"clkout{n}_divide"]
+            self.params[f"p_CLKOUT{n}_PHASE"] = config[f"clkout{n}_phase"]
+            self.params[f"o_CLKOUT{n}"] = clk
         self.specials += Instance("PLLE2_ADV", **self.params)
 
 
@@ -63,7 +63,7 @@ class USMMCM(XilinxClocking):
 
     def __init__(self, speedgrade=-1):
         self.logger = logging.getLogger("USMMCM")
-        self.logger.info("Creating USMMCM, {}.".format(colorer("speedgrade {}".format(speedgrade))))
+        self.logger.info(f'Creating USMMCM, {colorer(f"speedgrade {speedgrade}")}.')
         XilinxClocking.__init__(self)
         self.divclk_divide_range = (1, 106+1)
         self.clkin_freq_range = {
@@ -99,11 +99,11 @@ class USMMCM(XilinxClocking):
         )
         for n, (clk, f, p, m) in sorted(self.clkouts.items()):
             if n == 0:
-                self.params["p_CLKOUT{}_DIVIDE_F".format(n)] = config["clkout{}_divide".format(n)]
+                self.params[f"p_CLKOUT{n}_DIVIDE_F"] = config[f"clkout{n}_divide"]
             else:
-                self.params["p_CLKOUT{}_DIVIDE".format(n)] = config["clkout{}_divide".format(n)]
-            self.params["p_CLKOUT{}_PHASE".format(n)] = config["clkout{}_phase".format(n)]
-            self.params["o_CLKOUT{}".format(n)]       = clk
+                self.params[f"p_CLKOUT{n}_DIVIDE"] = config[f"clkout{n}_divide"]
+            self.params[f"p_CLKOUT{n}_PHASE"] = config[f"clkout{n}_phase"]
+            self.params[f"o_CLKOUT{n}"] = clk
         self.specials += Instance("MMCME2_ADV", **self.params)
 
 

@@ -20,10 +20,21 @@ class DFUProg(GenericProgrammer):
         self.alt = alt
 
     def load_bitstream(self, bitstream_file, reset=True):
-        subprocess.call(["cp", bitstream_file, bitstream_file + ".dfu"])
-        subprocess.call(["dfu-suffix", "-v", self.vid, "-p", self.pid, "-a", bitstream_file + ".dfu"])
+        subprocess.call(["cp", bitstream_file, f"{bitstream_file}.dfu"])
+        subprocess.call(
+            [
+                "dfu-suffix",
+                "-v",
+                self.vid,
+                "-p",
+                self.pid,
+                "-a",
+                f"{bitstream_file}.dfu",
+            ]
+        )
 
-        flash_cmd = ["dfu-util", "--download", bitstream_file + ".dfu"]
+
+        flash_cmd = ["dfu-util", "--download", f"{bitstream_file}.dfu"]
         if reset:
             flash_cmd.append("-R")
         if self.alt is not None:

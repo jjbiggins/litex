@@ -65,8 +65,18 @@ class XC3SProg(GenericProgrammer):
 
     def flash(self, address, data_file):
         flash_proxy = self.find_flash_proxy()
-        self.call(["xc3sprog", "-v", "-c", self.cable, "-p", str(self.position),
-            "-I"+flash_proxy, "{}:w:0x{:x}:BIN".format(data_file, address)])
+        self.call(
+            [
+                "xc3sprog",
+                "-v",
+                "-c",
+                self.cable,
+                "-p",
+                str(self.position),
+                f"-I{flash_proxy}",
+                "{}:w:0x{:x}:BIN".format(data_file, address),
+            ]
+        )
 
 # FpgaProg -----------------------------------------------------------------------------------------
 

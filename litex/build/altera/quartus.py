@@ -25,24 +25,22 @@ def _format_constraint(c, signame, fmt_r):
         tpl = "set_location_assignment -comment \"{name}\" -to {signame} Pin_{pin}"
         return tpl.format(signame=signame, name=fmt_r, pin=c.identifiers[0])
 
-    # IO standard constraints
     elif isinstance(c, IOStandard):
         tpl = "set_instance_assignment -name io_standard -comment \"{name}\" \"{std}\" -to {signame}"
         return tpl.format(signame=signame, name=fmt_r, std=c.name)
 
-    # Others constraints
     elif isinstance(c, Misc):
         if not isinstance(c.misc, str) and len(c.misc) == 2:
             tpl = "set_instance_assignment -comment \"{name}\" -name {misc[0]} \"{misc[1]}\" -to {signame}"
-            return tpl.format(signame=signame, name=fmt_r, misc=c.misc)
         else:
             tpl = "set_instance_assignment -comment \"{name}\"  -name {misc} -to {signame}"
-            return tpl.format(signame=signame, name=fmt_r, misc=c.misc)
+
+        return tpl.format(signame=signame, name=fmt_r, misc=c.misc)
 
 def _format_qsf_constraint(signame, pin, others, resname):
     fmt_r = "{}:{}".format(*resname[:2])
     if resname[2] is not None:
-        fmt_r += "." + resname[2]
+        fmt_r += f".{resname[2]}"
     fmt_c = [_format_constraint(c, signame, fmt_r) for c in ([Pins(pin)] + others)]
     return '\n'.join(fmt_c)
 
@@ -58,13 +56,13 @@ def _build_qsf_constraints(named_sc, named_pc):
     qsf = []
     for sig, pins, others, resname in named_sc:
         if len(pins) > 1:
-            for i, p in enumerate(pins):
-                if _is_virtual_pin(p):
-                    continue
-                qsf.append(_format_qsf_constraint("{}[{}]".format(sig, i), p, others, resname))
-        else:
-            if _is_virtual_pin(pins[0]):
-                continue
+            qsf.extend(
+                _format_qsf_constraint(f"{sig}[{i}]", p, others, resname)
+                for i, p in enumerate(pins)
+                if not _is_virtual_pin(p)
+            )
+
+        elif not _is_virtual_pin(pins[0]):
             qsf.append(_format_qsf_constraint(sig, pins[0], others, resname))
     if named_pc:
         qsf.append("\n\n".join(named_pc))
@@ -83,32 +81,31 @@ def _build_sdc(clocks, false_paths, vns, named_sc, build_name, additional_sdc_co
                 is_port = True
         if is_port:
             tpl = "create_clock -name {clk} -period {period} [get_ports {{{clk}}}]"
-            sdc.append(tpl.format(clk=vns.get_name(clk), period=str(period)))
         else:
             tpl = "create_clock -name {clk} -period {period} [get_nets {{{clk}}}]"
-            sdc.append(tpl.format(clk=vns.get_name(clk), period=str(period)))
-
+        sdc.append(tpl.format(clk=vns.get_name(clk), period=str(period)))
     # Enable automatical constraint generation for PLLs
     sdc.append("derive_pll_clocks")
 
+    tpl = "set_false_path -from [get_clocks {{{from_}}}] -to [get_clocks {{{to}}}]"
     # False path constraints
-    for from_, to in sorted(false_paths, key=lambda x: (x[0].duid, x[1].duid)):
-        tpl = "set_false_path -from [get_clocks {{{from_}}}] -to [get_clocks {{{to}}}]"
-        sdc.append(tpl.format(from_=vns.get_name(from_), to=vns.get_name(to)))
+    sdc.extend(
+        tpl.format(from_=vns.get_name(from_), to=vns.get_name(to))
+        for from_, to in sorted(
+            false_paths, key=lambda x: (x[0].duid, x[1].duid)
+        )
+    )
 
     # Add additional commands
     sdc += additional_sdc_commands
 
     # Generate .sdc
-    tools.write_to_file("{}.sdc".format(build_name), "\n".join(sdc))
+    tools.write_to_file(f"{build_name}.sdc", "\n".join(sdc))
 
 # Project (.qsf) -----------------------------------------------------------------------------------
 
 def _build_qsf(device, ips, sources, vincpaths, named_sc, named_pc, build_name, additional_qsf_commands):
-    qsf = []
-
-    # Set device
-    qsf.append("set_global_assignment -name DEVICE {}".format(device))
+    qsf = [f"set_global_assignment -name DEVICE {device}"]
 
     # Add sources
     for filename, language, library, *copy in sources:
@@ -117,48 +114,58 @@ def _build_qsf(device, ips, sources, vincpaths, named_sc, named_pc, build_name, 
         # Do not add None type files
         if language is not None:
             qsf.append(tpl.format(lang=language.upper(), path=filename.replace("\\", "/"), lib=library))
-        # Check if the file is a header. Those should not be explicitly added to qsf,
-        # but rather included in include search_path
-        else:
-            if filename.endswith(".svh") or filename.endswith(".vh"):
-                fpath = os.path.dirname(filename)
-                if fpath not in vincpaths:
-                    vincpaths.append(fpath)
+        elif filename.endswith(".svh") or filename.endswith(".vh"):
+            fpath = os.path.dirname(filename)
+            if fpath not in vincpaths:
+                vincpaths.append(fpath)
 
+    tpl = "set_global_assignment -name QSYS_FILE {filename}"
     # Add ips
-    for filename in ips:
-        tpl = "set_global_assignment -name QSYS_FILE {filename}"
-        qsf.append(tpl.replace(filename=filename.replace("\\", "/")))
+    qsf.extend(
+        tpl.replace(filename=filename.replace("\\", "/")) for filename in ips
+    )
 
     # Add include paths
-    for path in vincpaths:
-        qsf.append("set_global_assignment -name SEARCH_PATH {}".format(path.replace("\\", "/")))
+    qsf.extend(
+        "set_global_assignment -name SEARCH_PATH {}".format(
+            path.replace("\\", "/")
+        )
+        for path in vincpaths
+    )
 
     # Set top level
-    qsf.append("set_global_assignment -name top_level_entity " + build_name)
+    qsf.append(f"set_global_assignment -name top_level_entity {build_name}")
 
     # Add io, placement constraints
     qsf.append(_build_qsf_constraints(named_sc, named_pc))
 
     # Set timing constraints
-    qsf.append("set_global_assignment -name SDC_FILE {}.sdc".format(build_name))
+    qsf.append(f"set_global_assignment -name SDC_FILE {build_name}.sdc")
 
     # Add additional commands
     qsf += additional_qsf_commands
 
     # Generate .qsf
-    tools.write_to_file("{}.qsf".format(build_name), "\n".join(qsf))
+    tools.write_to_file(f"{build_name}.qsf", "\n".join(qsf))
 
 # Script -------------------------------------------------------------------------------------------
 
 def _build_script(build_name, create_rbf):
     if sys.platform in ["win32", "cygwin"]:
-        script_file = "build_" + build_name + ".bat"
-        script_contents = "REM Autogenerated by LiteX / git: " + tools.get_litex_git_revision() + "\n"
+        script_file = f"build_{build_name}.bat"
+        script_contents = (
+            f"REM Autogenerated by LiteX / git: {tools.get_litex_git_revision()}"
+            + "\n"
+        )
+
     else:
-        script_file = "build_" + build_name + ".sh"
+        script_file = f"build_{build_name}.sh"
         script_contents = "#!/usr/bin/env bash\n"
-        script_contents += "# Autogenerated by LiteX / git: " + tools.get_litex_git_revision() + "\n"
+        script_contents += (
+            f"# Autogenerated by LiteX / git: {tools.get_litex_git_revision()}"
+            + "\n"
+        )
+
         script_contents += "set -e -u -x -o pipefail\n"
     script_contents += """
 quartus_map --read_settings_files=on  --write_settings_files=off {build_name} -c {build_name}
@@ -185,14 +192,13 @@ fi
     return script_file
 
 def _run_script(script):
-    if sys.platform in ["win32", "cygwin"]:
-        shell = ["cmd", "/c"]
-    else:
-        shell = ["bash"]
-
+    shell = ["cmd", "/c"] if sys.platform in ["win32", "cygwin"] else ["bash"]
     if which("quartus_map") is None:
-        msg = "Unable to find Quartus toolchain, please:\n"
-        msg += "- Add Quartus toolchain to your $PATH."
+        msg = (
+            "Unable to find Quartus toolchain, please:\n"
+            + "- Add Quartus toolchain to your $PATH."
+        )
+
         raise OSError(msg)
 
     if subprocess.call(shell + [script]) != 0:
@@ -204,7 +210,7 @@ class AlteraQuartusToolchain:
     attr_translate = {}
 
     def __init__(self):
-        self.clocks      = dict()
+        self.clocks = {}
         self.false_paths = set()
         self.additional_sdc_commands = []
         self.additional_qsf_commands = []
@@ -228,7 +234,7 @@ class AlteraQuartusToolchain:
         # Generate verilog
         v_output = platform.get_verilog(fragment, name=build_name, **kwargs)
         named_sc, named_pc = platform.resolve_signals(v_output.ns)
-        v_file = build_name + ".v"
+        v_file = f"{build_name}.v"
         v_output.write(v_file)
         platform.add_source(v_file)
 
@@ -266,10 +272,9 @@ class AlteraQuartusToolchain:
     def add_period_constraint(self, platform, clk, period):
         clk.attr.add("keep")
         period = math.floor(period*1e3)/1e3 # round to lowest picosecond
-        if clk in self.clocks:
-            if period != self.clocks[clk]:
-                raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
-                    .format(self.clocks[clk], period))
+        if clk in self.clocks and period != self.clocks[clk]:
+            raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
+                .format(self.clocks[clk], period))
         self.clocks[clk] = period
 
     def add_false_path_constraint(self, platform, from_, to):

@@ -88,7 +88,7 @@ class GowinEMCU(CPU):
         self.gpio_out    = Signal(16)
         self.gpio_out_en = Signal(16)
 
-        self.cpu_params = dict()
+        self.cpu_params = {}
         self.cpu_params.update(
             i_MTXREMAP       = Signal(4, reset=0b1111),
             o_MTXHRESETN     = bus_reset_n,

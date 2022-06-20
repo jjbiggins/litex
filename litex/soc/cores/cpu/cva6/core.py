@@ -44,9 +44,9 @@ def add_manifest_sources(platform, manifest):
             res = re.search('\$\{CVA6_REPO_DIR\}/(.+)', l)
             if res and not re.match('//', l):
                 if re.match('\+incdir\+', l):
-                    platform.add_verilog_include_path(os.path.join(basedir, res.group(1)))
+                    platform.add_verilog_include_path(os.path.join(basedir, res[1]))
                 else:
-                    platform.add_source(os.path.join(basedir, res.group(1)))
+                    platform.add_source(os.path.join(basedir, res[1]))
 
 # CVA6 ---------------------------------------------------------------------------------------------
 
@@ -68,7 +68,7 @@ class CVA6(CPU):
     def gcc_flags(self):
         flags = GCC_FLAGS[self.variant]
         flags += "-D__cva6__ "
-        flags += f" -DUART_POLLING"
+        flags += " -DUART_POLLING"
         return flags
 
     # Memory Mapping.

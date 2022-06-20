@@ -34,17 +34,14 @@ class VCDWriter:
         self.initialized = False
         self.codegen = vcd_codes()
         self.codes = OrderedDict()
-        self.signal_values = dict()
+        self.signal_values = {}
         self.t = 0
 
     def _write_value(self, signal, value):
         l = len(signal)
         if value < 0:
             value += 2**l
-        if l > 1:
-            fmtstr = "b{:0" + str(l) + "b} {}\n"
-        else:
-            fmtstr = "{}{}\n"
+        fmtstr = "b{:0" + str(l) + "b} {}\n" if l > 1 else "{}{}\n"
         try:
             code = self.codes[signal]
         except KeyError:
@@ -99,7 +96,7 @@ class VCDWriter:
 
     def delay(self, delay):
         self.t += delay
-        self._write("#{}\n".format(self.t))
+        self._write(f"#{self.t}\n")
 
     def close(self):
         self.out_file.close()

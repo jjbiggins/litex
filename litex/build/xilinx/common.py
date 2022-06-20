@@ -410,12 +410,10 @@ xilinx_us_special_overrides = {
 
 def _run_yosys(device, sources, vincpaths, build_name):
     ys_contents = ""
-    incflags = ""
-    for path in vincpaths:
-        incflags += " -I" + path
+    incflags = "".join(f" -I{path}" for path in vincpaths)
     for filename, language, library, *copy in sources:
         assert language != "vhdl"
-        ys_contents += "read_{}{} {}\n".format(language, incflags, filename)
+        ys_contents += f"read_{language}{incflags} {filename}\n"
 
     ys_contents += """\
 hierarchy -top {build_name}
@@ -450,7 +448,7 @@ synth_xilinx -top {build_name}
 write_edif -pvector bra -attrprop {build_name}.edif
 """.format(build_name=build_name)
 
-    ys_name = build_name + ".ys"
+    ys_name = f"{build_name}.ys"
     tools.write_to_file(ys_name, ys_contents)
     r = subprocess.call(["yosys", ys_name])
     if r != 0:

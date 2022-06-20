@@ -146,9 +146,9 @@ def _print_constant(node):
 
 def _print_signal(ns, s):
     return "{signed}{vector}{name}".format(
-        signed = "" if (not s.signed) else "signed ",
-        vector = "" if ( len(s) <= 1) else f"[{str(len(s)-1) }:0] ",
-        name   = ns.get_name(s)
+        signed="signed " if s.signed else "",
+        vector="" if (len(s) <= 1) else f"[{str(len(s)-1) }:0] ",
+        name=ns.get_name(s),
     )
 
 # Print Operator -----------------------------------------------------------------------------------
@@ -270,23 +270,21 @@ def _print_node(ns, at, level, node, target_filter=None):
     if target_filter is not None and target_filter not in list_targets(node):
         return ""
 
-    # Assignment.
     elif isinstance(node, _Assign):
-        if at == _AT_BLOCKING:
-            assignment = " = "
-        elif at == _AT_NONBLOCKING:
-            assignment = " <= "
-        elif is_variable(node.l):
+        if (
+            at == _AT_BLOCKING
+            or at != _AT_BLOCKING
+            and at != _AT_NONBLOCKING
+            and is_variable(node.l)
+        ):
             assignment = " = "
         else:
             assignment = " <= "
         return "\t"*level + _print_expression(ns, node.l)[0] + assignment + _print_expression(ns, node.r)[0] + ";\n"
 
-    # Iterable.
     elif isinstance(node, collections.abc.Iterable):
         return "".join(_print_node(ns, at, level, n, target_filter) for n in node)
 
-    # If.
     elif isinstance(node, If):
         r = "\t"*level + "if (" + _print_expression(ns, node.cond)[0] + ") begin\n"
         r += _print_node(ns, at, level + 1, node.t, target_filter)
@@ -296,41 +294,33 @@ def _print_node(ns, at, level, node, target_filter=None):
         r += "\t"*level + "end\n"
         return r
 
-    # Case.
     elif isinstance(node, Case):
-        if node.cases:
-            r = "\t"*level + "case (" + _print_expression(ns, node.test)[0] + ")\n"
-            css = [(k, v) for k, v in node.cases.items() if isinstance(k, Constant)]
-            css = sorted(css, key=lambda x: x[0].value)
-            for choice, statements in css:
-                r += "\t"*(level + 1) + _print_expression(ns, choice)[0] + ": begin\n"
-                r += _print_node(ns, at, level + 2, statements, target_filter)
-                r += "\t"*(level + 1) + "end\n"
-            if "default" in node.cases:
-                r += "\t"*(level + 1) + "default: begin\n"
-                r += _print_node(ns, at, level + 2, node.cases["default"], target_filter)
-                r += "\t"*(level + 1) + "end\n"
-            r += "\t"*level + "endcase\n"
-            return r
-        else:
+        if not node.cases:
             return ""
 
-    # Display.
+        r = "\t"*level + "case (" + _print_expression(ns, node.test)[0] + ")\n"
+        css = [(k, v) for k, v in node.cases.items() if isinstance(k, Constant)]
+        css = sorted(css, key=lambda x: x[0].value)
+        for choice, statements in css:
+            r += "\t"*(level + 1) + _print_expression(ns, choice)[0] + ": begin\n"
+            r += _print_node(ns, at, level + 2, statements, target_filter)
+            r += "\t"*(level + 1) + "end\n"
+        if "default" in node.cases:
+            r += "\t"*(level + 1) + "default: begin\n"
+            r += _print_node(ns, at, level + 2, node.cases["default"], target_filter)
+            r += "\t"*(level + 1) + "end\n"
+        r += "\t"*level + "endcase\n"
+        return r
     elif isinstance(node, Display):
         s = "\"" + node.s + "\""
         for arg in node.args:
             s += ", "
-            if isinstance(arg, Signal):
-                s += ns.get_name(arg)
-            else:
-                s += str(arg)
+            s += ns.get_name(arg) if isinstance(arg, Signal) else str(arg)
         return "\t"*level + "$display(" + s + ");\n"
 
-    # Finish.
     elif isinstance(node, Finish):
         return "\t"*level + "$finish;\n"
 
-    # Unknown.
     else:
         raise TypeError(f"Node of unrecognized type: {str(type(node))}")
 
@@ -355,10 +345,15 @@ def _print_attribute(attr, attr_translate):
         if not firsta:
             r += ", "
         firsta = False
-        const_expr = "\"" + attr_value + "\"" if not isinstance(attr_value, int) else str(attr_value)
-        r += attr_name + " = " + const_expr
+        const_expr = (
+            str(attr_value)
+            if isinstance(attr_value, int)
+            else "\"" + attr_value + "\""
+        )
+
+        r += f"{attr_name} = {const_expr}"
     if r:
-        r = "(* " + r + " *)"
+        r = f"(* {r} *)"
     return r
 
 # ------------------------------------------------------------------------------------------------ #
@@ -386,8 +381,7 @@ def _print_module(f, ios, name, ns, attr_translate):
         if not firstp:
             r += ",\n"
         firstp = False
-        attr = _print_attribute(sig.attr, attr_translate)
-        if attr:
+        if attr := _print_attribute(sig.attr, attr_translate):
             r += "\t" + attr
         sig.type = "wire"
         sig.name = ns.get_name(sig)
@@ -418,13 +412,16 @@ def _print_signals(f, ios, name, ns, attr_translate):
 
     r = ""
     for sig in sorted(sigs - ios, key=lambda x: x.duid):
-        attr = _print_attribute(sig.attr, attr_translate)
-        if attr:
-            r += attr + " "
+        if attr := _print_attribute(sig.attr, attr_translate):
+            r += f"{attr} "
         if sig in wires:
-            r += "wire " + _print_signal(ns, sig) + ";\n"
+            r += f"wire {_print_signal(ns, sig)}" + ";\n"
         else:
-            r += "reg  " + _print_signal(ns, sig) + " = " + _print_expression(ns, sig.reset)[0] + ";\n"
+            r += (
+                f"reg  {_print_signal(ns, sig)} = {_print_expression(ns, sig.reset)[0]}"
+                + ";\n"
+            )
+
     return r
 
 # ------------------------------------------------------------------------------------------------ #
@@ -445,10 +442,10 @@ def _print_combinatorial_logic_sim(f, ns):
 
         groups = group_by_targets(f.comb)
 
-        for n, (t, stmts) in enumerate(target_stmt_map.items()):
+        for t, stmts in target_stmt_map.items():
             assert isinstance(t, Signal)
             if len(stmts) == 1 and isinstance(stmts[0], _Assign):
-                r += "assign " + _print_node(ns, _AT_BLOCKING, 0, stmts[0])
+                r += f"assign {_print_node(ns, _AT_BLOCKING, 0, stmts[0])}"
             else:
                 r += "always @(*) begin\n"
                 r += "\t" + ns.get_name(t) + " <= " + _print_expression(ns, t.reset)[0] + ";\n"
@@ -462,9 +459,9 @@ def _print_combinatorial_logic_synth(f, ns):
     if f.comb:
         groups = group_by_targets(f.comb)
 
-        for n, g in enumerate(groups):
+        for g in groups:
             if len(g[1]) == 1 and isinstance(g[1][0], _Assign):
-                r += "assign " + _print_node(ns, _AT_BLOCKING, 0, g[1][0])
+                r += f"assign {_print_node(ns, _AT_BLOCKING, 0, g[1][0])}"
             else:
                 r += "always @(*) begin\n"
                 for t in g[0]:
@@ -481,7 +478,7 @@ def _print_combinatorial_logic_synth(f, ns):
 def _print_synchronous_logic(f, ns):
     r = ""
     for k, v in sorted(f.sync.items(), key=itemgetter(0)):
-        r += "always @(posedge " + ns.get_name(f.clock_domains[k].clk) + ") begin\n"
+        r += f"always @(posedge {ns.get_name(f.clock_domains[k].clk)}" + ") begin\n"
         r += _print_node(ns, _AT_SIGNAL, 1, v)
         r += "end\n\n"
     return r
@@ -494,9 +491,8 @@ def _print_specials(name, overrides, specials, namespace, add_data_file, attr_tr
     r = ""
     for special in sorted(specials, key=lambda x: x.duid):
         if hasattr(special, "attr"):
-            attr = _print_attribute(special.attr, attr_translate)
-            if attr:
-                r += attr + " "
+            if attr := _print_attribute(special.attr, attr_translate):
+                r += f"{attr} "
         # Replace Migen Memory's emit_verilog with LiteX's implementation.
         if isinstance(special, Memory):
             from litex.gen.fhdl.memory import memory_emit_verilog
@@ -504,7 +500,10 @@ def _print_specials(name, overrides, specials, namespace, add_data_file, attr_tr
         else:
             pr = call_special_classmethod(overrides, special, "emit_verilog", namespace, add_data_file)
         if pr is None:
-            raise NotImplementedError("Special " + str(special) + " failed to implement emit_verilog")
+            raise NotImplementedError(
+                f"Special {str(special)} failed to implement emit_verilog"
+            )
+
         r += pr
     return r
 
@@ -566,8 +565,7 @@ def convert(f, ios=set(), name="top", platform=None,
     # IOs backtrace/naming.
     for io in sorted(ios, key=lambda x: x.duid):
         if io.name_override is None:
-            io_name = io.backtrace[-1][0]
-            if io_name:
+            if io_name := io.backtrace[-1][0]:
                 io.name_override = io_name
 
     # Build NameSpace.

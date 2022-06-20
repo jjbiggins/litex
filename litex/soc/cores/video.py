@@ -171,8 +171,11 @@ class VideoTimingGenerator(Module, AutoCSR):
                 self.video_timings = vt = video_timings[default_video_timings]
             except KeyError:
                 msg = [f"Video Timings {default_video_timings} not supported, availables:"]
-                for video_timing in video_timings.keys():
-                    msg.append(f" - {video_timing} / {video_timings[video_timing]['pix_clk']/1e6:3.2f}MHz.")
+                msg.extend(
+                    f" - {video_timing} / {video_timings[video_timing]['pix_clk']/1e6:3.2f}MHz."
+                    for video_timing in video_timings.keys()
+                )
+
                 raise ValueError("\n".join(msg))
         else:
             self.video_timings = vt = default_video_timings
@@ -320,13 +323,15 @@ class ColorBarsPattern(Module):
             [0x00, 0x00, 0xff], # Blue
             [0x00, 0x00, 0x00], # Black
         ]
-        cases = {}
-        for i in range(8):
-            cases[i] = [
+        cases = {
+            i: [
                 source.r.eq(color_bar[i][0]),
                 source.g.eq(color_bar[i][1]),
-                source.b.eq(color_bar[i][2])
+                source.b.eq(color_bar[i][2]),
             ]
+            for i in range(8)
+        }
+
         self.comb += Case(bar, cases)
 
 # Video Terminal -----------------------------------------------------------------------------------
@@ -346,7 +351,7 @@ def import_bdf_font(filename):
                 bitmap_enable = False
             if bitmap_enable:
                 if char < 256:
-                    font[char*16 + bitmap_index] = int("0x"+l[0], 0)
+                    font[char*16 + bitmap_index] = int(f"0x{l[0]}", 0)
                 bitmap_index += 1
             if l[0] == "BITMAP":
                 bitmap_enable = True

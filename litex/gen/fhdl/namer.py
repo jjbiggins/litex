@@ -25,15 +25,9 @@ def _display_tree(filename, tree):
     def _to_render_node(name, node):
         children = [_to_render_node(k, v) for k, v in node.children.items()]
         if node.use_name:
-            if node.use_number:
-                color = (0.5, 0.9, 0.8)
-            else:
-                color = (0.8, 0.5, 0.9)
+            color = (0.5, 0.9, 0.8) if node.use_number else (0.8, 0.5, 0.9)
         else:
-            if node.use_number:
-                color = (0.9, 0.8, 0.5)
-            else:
-                color = (0.8, 0.8, 0.8)
+            color = (0.9, 0.8, 0.5) if node.use_number else (0.8, 0.8, 0.8)
         label = "{0}\n{1} signals\n{2}".format(name, node.signal_count, node.numbers)
         return RenderNode(label, children, color=color)
 
@@ -53,10 +47,7 @@ def _build_tree(signals, basic_tree=None):
             else:
                 current_b  = current_b.children[name]
                 use_number = current_b.use_number
-            if use_number:
-                key = (name, number)
-            else:
-                key = name
+            key = (name, number) if use_number else name
             try:
                 current = current.children[key]
             except KeyError:
@@ -110,11 +101,11 @@ def _name_signal(tree, signal):
 
 
 def _build_pnd_from_tree(tree, signals):
-    return dict((signal, _name_signal(tree, signal)) for signal in signals)
+    return {signal: _name_signal(tree, signal) for signal in signals}
 
 
 def _invert_pnd(pnd):
-    inv_pnd = dict()
+    inv_pnd = {}
     for k, v in pnd.items():
         inv_pnd[v] = inv_pnd.get(v, [])
         inv_pnd[v].append(k)
@@ -135,7 +126,7 @@ def _set_use_number(tree, signals):
         current = tree
         for step_name, step_n in signal.backtrace:
             current = current.children[step_name]
-            current.use_number = current.signal_count > len(current.numbers) and len(current.numbers) > 1
+            current.use_number = current.signal_count > len(current.numbers) > 1
 
 _debug = False
 
@@ -147,9 +138,7 @@ def _build_pnd_for_group(group_n, signals):
         _display_tree("tree{0}_basic.svg".format(group_n), basic_tree)
     pnd = _build_pnd_from_tree(basic_tree, signals)
 
-    # If there are conflicts, try splitting the tree by numbers on paths taken by conflicting signals.
-    conflicting_signals = _list_conflicting_signals(pnd)
-    if conflicting_signals:
+    if conflicting_signals := _list_conflicting_signals(pnd):
         _set_use_number(basic_tree, conflicting_signals)
         if _debug:
             print("namer: using split-by-number strategy (group {0})".format(group_n))
@@ -159,9 +148,8 @@ def _build_pnd_for_group(group_n, signals):
         if _debug:
             _display_tree("tree{0}_numbered.svg".format(group_n), numbered_tree)
         pnd = _build_pnd_from_tree(numbered_tree, signals)
-    else:
-        if _debug:
-            print("namer: using basic strategy (group {0})".format(group_n))
+    elif _debug:
+        print("namer: using basic strategy (group {0})".format(group_n))
 
     # ...then add number suffixes by DUID.
     inv_pnd       = _invert_pnd(pnd)
@@ -187,8 +175,7 @@ def _build_signal_groups(signals):
             related_list.insert(0, cur_signal)
             cur_signal = cur_signal.related
         # Add to groups.
-        for _ in range(len(related_list) - len(r)):
-            r.append(set())
+        r.extend(set() for _ in range(len(related_list) - len(r)))
         for target_set, source_signal in zip(r, related_list):
             target_set.add(source_signal)
     # With the algorithm above and a list of all signals, a signal appears in all groups of a lower
@@ -201,7 +188,7 @@ def _build_signal_groups(signals):
 def _build_pnd(signals):
     groups = _build_signal_groups(signals)
     gpnds  = [_build_pnd_for_group(n, gsignals) for n, gsignals in enumerate(groups)]
-    pnd    = dict()
+    pnd = {}
     for gn, gpnd in enumerate(gpnds):
         for signal, name in gpnd.items():
             result     = name
@@ -210,7 +197,7 @@ def _build_pnd(signals):
             while cur_signal.related is not None:
                 cur_signal = cur_signal.related
                 cur_gn     -= 1
-                result     = gpnds[cur_gn][cur_signal] + "_" + result
+                result = f"{gpnds[cur_gn][cur_signal]}_{result}"
             pnd[signal] = result
     return pnd
 
@@ -230,7 +217,7 @@ class Namespace:
         self.counts = {k: 1 for k in reserved_keywords}
         self.sigs   = {}
         self.pnd    = pnd
-        self.clock_domains = dict()
+        self.clock_domains = {}
 
     def get_name(self, sig):
         # Get name of a Clock Signal.
@@ -249,12 +236,7 @@ class Namespace:
         # Get name of a Regular Signal.
         # -----------------------------
         # Use Name's override when set...
-        if sig.name_override is not None:
-            sig_name = sig.name_override
-        # ... else get Name from pnd.
-        else:
-            sig_name = self.pnd[sig]
-
+        sig_name = self.pnd[sig] if sig.name_override is None else sig.name_override
         # Check/Add numbering suffix when required.
         # -----------------------------------------
         try:

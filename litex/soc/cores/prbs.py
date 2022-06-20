@@ -30,7 +30,7 @@ class PRBSGenerator(Module):
         state  = Signal(n_state, reset=1)
         curval = [state[i] for i in range(n_state)]
         curval += [0]*(n_out - n_state)
-        for i in range(n_out):
+        for _ in range(n_out):
             nv = reduce(xor, [curval[tap] for tap in taps])
             curval.insert(0, nv)
             curval.pop()
