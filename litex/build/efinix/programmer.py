@@ -19,8 +19,11 @@ class EfinixProgrammer(GenericProgrammer):
     def __init__(self, cable_name=""):
         self.cable_name = cable_name
         if os.getenv("LITEX_ENV_EFINITY", False) == False:
-            msg = "Unable to find or source Efinity toolchain, please either:\n"
-            msg += "- Set LITEX_ENV_EFINITY environment variant to Efinity path.\n"
+            msg = (
+                "Unable to find or source Efinity toolchain, please either:\n"
+                + "- Set LITEX_ENV_EFINITY environment variant to Efinity path.\n"
+            )
+
             msg += "- Or add Efinity toolchain to your $PATH."
             raise OSError(msg)
 
@@ -28,14 +31,24 @@ class EfinixProgrammer(GenericProgrammer):
         os.environ["EFINITY_HOME"] = self.efinity_path
 
     def load_bitstream(self, bitstream_file, cable_suffix=""):
-        os.environ['EFXPGM_HOME'] = self.efinity_path + '/pgm'
-        if (subprocess.call([self.efinity_path + '/bin/python3', self.efinity_path +
-                   '/pgm/bin/efx_pgm/ftdi_program.py', bitstream_file,
-                   "-m", "jtag"], env=os.environ.copy()) != 0):
+        os.environ['EFXPGM_HOME'] = f'{self.efinity_path}/pgm'
+        if (
+            subprocess.call(
+                [
+                    f'{self.efinity_path}/bin/python3',
+                    self.efinity_path + '/pgm/bin/efx_pgm/ftdi_program.py',
+                    bitstream_file,
+                    "-m",
+                    "jtag",
+                ],
+                env=os.environ.copy(),
+            )
+            != 0
+        ):
             msg = f"Error occured during {self.__class__.__name__}'s call, please check:\n"
             msg += f"- {self.__class__.__name__} installation.\n"
             msg += f"- access permissions.\n"
-            msg += f"- hardware and cable."
+            msg += "- hardware and cable."
             raise OSError(msg)
 
 
@@ -56,10 +69,9 @@ class EfinixAtmelProgrammer:
             raise ValueError(f"did not find Atmel USB programmer device with VID{self.vid:04x} PID{self.pid:04x}")
         dev.reset()
         reattach = False
-        if os.name != 'nt':
-            if dev.is_kernel_driver_active(0):
-                reattach = True
-                dev.detach_kernel_driver(0)
+        if os.name != 'nt' and dev.is_kernel_driver_active(0):
+            reattach = True
+            dev.detach_kernel_driver(0)
         dev.set_configuration()
         self.out_ep = dev[0][(0,0)][1]
 
@@ -118,8 +130,8 @@ class EfinixAtmelProgrammer:
             # print(f"payload l={len(payload)}")
             length = min(CHUNK, len(payload))
             packet = [self.padding] * CHUNK
-            packet = payload[0:length]
-            packet[0:length] = payload[0:length]
+            packet = payload[:length]
+            packet[0:length] = payload[:length]
             payload = payload[length:]
             self._send_packet(packet, flash)
 
@@ -134,7 +146,7 @@ class EfinixAtmelProgrammer:
         lines = hexfile.split('\n')
         while lines[-1] == '':
             lines = lines[:-1]
-        payload = [int(l[0:2], 16) for l in lines]
+        payload = [int(l[:2], 16) for l in lines]
         length = len(payload)
         self._expand_to_offset(offset)
         self.payload[offset:+length] = payload

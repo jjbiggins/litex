@@ -78,7 +78,16 @@ def bit_to_svf(bit, svf):
                 # Convert chunk to bit-reversed hex
                 br_chunk = [bitreverse(x) for x in chunk]
                 hex_chunk = ["{:02X}".format(x) for x in reversed(br_chunk)]
-                print("\n".join(textwrap.wrap("SDR {} TDI ({});".format(8*len(chunk), "".join(hex_chunk)), 100)), file=svf)
+                print(
+                    "\n".join(
+                        textwrap.wrap(
+                            f'SDR {8 * len(chunk)} TDI ({"".join(hex_chunk)});',
+                            100,
+                        )
+                    ),
+                    file=svf,
+                )
+
 
             print("""
     SIR	8	TDI  (FF);

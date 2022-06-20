@@ -30,14 +30,14 @@ class GowinProgrammer(GenericProgrammer):
         self.device = str(devname)
 
         # windows/powershell or msys2
-        self.is_win32 = True if sys.platform == "win32" else False
+        self.is_win32 = sys.platform == "win32"
 
         self.is_wsl = False
         if sys.platform.find("linux") >= 0:
             self.is_wsl = os.uname().release.find("WSL") > 0
 
         self.programmer = "programmer_cli"
-        
+
         # note for WSL:
         # gowin programmer_cli not working out of it's directory
         if self.is_wsl or self.is_win32:
@@ -63,10 +63,10 @@ class GowinProgrammer(GenericProgrammer):
             exit(1)
 
         if self.is_wsl is True and data_file is not None:
-            data_file = os.popen("wslpath -w {}".format(data_file)).read().strip("\n") 
+            data_file = os.popen(f"wslpath -w {data_file}").read().strip("\n") 
 
         if self.is_wsl is True and fifile is not None:
-            fifile = os.popen("wslpath -w {}".format(fifile)).read().strip("\n")
+            fifile = os.popen(f"wslpath -w {fifile}").read().strip("\n")
 
         cmd_line = [self.programmer, 
                 "--spiaddr", str(address),
@@ -88,8 +88,8 @@ class GowinProgrammer(GenericProgrammer):
         pmode = 4 if verify else 2
         bitfile = bitstream_file
         if self.is_wsl is True:
-            bitfile = os.popen("wslpath -w {}".format(bitstream_file)).read().strip("\n")
-            
+            bitfile = os.popen(f"wslpath -w {bitstream_file}").read().strip("\n")
+
         cmd_line = [self.programmer,
             "--device", str(self.device),
             "--fsFile", str(bitfile),

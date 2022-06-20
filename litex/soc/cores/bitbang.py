@@ -95,8 +95,11 @@ def collect_i2c_info(soc):
             soc.add_config("HAS_I2C", check_duplicate=False)
             i2c_devs.append((name, getattr(obj, "default_dev")))
             if hasattr(obj, "init"):
-                for addr, init, init_addr_len in obj.init:
-                    i2c_init.append((name, addr, init, init_addr_len))
+                i2c_init.extend(
+                    (name, addr, init, init_addr_len)
+                    for addr, init, init_addr_len in obj.init
+                )
+
     return i2c_devs, i2c_init
 
 # SPI Master Bit-Banging ---------------------------------------------------------------------------

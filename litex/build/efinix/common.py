@@ -70,9 +70,9 @@ class EfinixTristateImpl(Module):
             io_name = platform.get_pin_name(io[bit])
             io_loc  = platform.get_pin_location(io[bit])
             io_prop = platform.get_pin_properties(io[bit])
-            io_o    = platform.add_iface_io(io_name + "_OUT")
-            io_oe   = platform.add_iface_io(io_name +  "_OE")
-            io_i    = platform.add_iface_io(io_name +  "_IN")
+            io_o = platform.add_iface_io(f"{io_name}_OUT")
+            io_oe = platform.add_iface_io(f"{io_name}_OE")
+            io_i = platform.add_iface_io(f"{io_name}_IN")
             self.comb += io_o.eq(o >> bit)
             self.comb += io_oe.eq(oe)
             if i is not None:

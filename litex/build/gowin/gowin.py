@@ -24,8 +24,7 @@ def _build_cst(named_sc, named_pc):
     flat_sc = []
     for name, pins, other, resource in named_sc:
         if len(pins) > 1:
-            for i, p in enumerate(pins):
-                flat_sc.append((f"{name}[{i}]", p, other))
+            flat_sc.extend((f"{name}[{i}]", p, other) for i, p in enumerate(pins))
         else:
             flat_sc.append((name, pins[0], other))
 
@@ -46,25 +45,23 @@ def _build_cst(named_sc, named_pc):
         f.write("\n".join(cst))
 
 def _build_sdc(clocks, vns):
-    sdc = []
-    for clk, period in sorted(clocks.items(), key=lambda x: x[0].duid):
-        sdc.append(f"create_clock -name {vns.get_name(clk)} -period {str(period)} [get_ports {{{vns.get_name(clk)}}}]")
+    sdc = [
+        f"create_clock -name {vns.get_name(clk)} -period {str(period)} [get_ports {{{vns.get_name(clk)}}}]"
+        for clk, period in sorted(clocks.items(), key=lambda x: x[0].duid)
+    ]
+
     with open("top.sdc", "w") as f:
         f.write("\n".join(sdc))
 
 # Script -------------------------------------------------------------------------------------------
 
 def _build_tcl(name, partnumber, files, options):
-    tcl = []
+    tcl = [
+        f"set_device -name {name} {partnumber}",
+        "add_file top.cst",
+        "add_file top.sdc",
+    ]
 
-    # Set Device.
-    tcl.append(f"set_device -name {name} {partnumber}")
-
-    # Add IOs Constraints.
-    tcl.append("add_file top.cst")
-
-    # Add Timings Constraints.
-    tcl.append("add_file top.sdc")
 
     # Add Sources.
     for f, typ, lib in files:
@@ -74,9 +71,7 @@ def _build_tcl(name, partnumber, files, options):
         tcl.append(f"add_file {f}")
 
     # Set Options.
-    for opt, val in options.items():
-        tcl.append(f"set_option -{opt} {val}")
-
+    tcl.extend(f"set_option -{opt} {val}" for opt, val in options.items())
     # Run.
     tcl.append("run all")
 
@@ -91,7 +86,7 @@ class GowinToolchain:
 
     def __init__(self):
         self.options = {}
-        self.clocks  = dict()
+        self.clocks = {}
 
     def apply_hyperram_integration_hack(self, v_file):
         # FIXME: Gowin EDA expects a very specific HypeRAM integration pattern, modify generated verilog to match it.
@@ -135,7 +130,7 @@ class GowinToolchain:
         # Generate verilog
         v_output = platform.get_verilog(fragment, name=build_name, **kwargs)
         named_sc, named_pc = platform.resolve_signals(v_output.ns)
-        v_file = build_name + ".v"
+        v_file = f"{build_name}.v"
         v_output.write(v_file)
         platform.add_source(v_file)
         self.apply_hyperram_integration_hack(v_file)
@@ -169,12 +164,17 @@ class GowinToolchain:
             # Some python distros for windows (e.g, oss-cad-suite)
             # which does not have 'os.uname' support, we should check 'sys.platform' firstly.
             gw_sh = "gw_sh"
-            if sys.platform.find("linux") >= 0:
-                if os.uname().release.find("WSL") > 0:
-                    gw_sh += ".exe"
+            if (
+                sys.platform.find("linux") >= 0
+                and os.uname().release.find("WSL") > 0
+            ):
+                gw_sh += ".exe"
             if which(gw_sh) is None:
-                msg = "Unable to find Gowin toolchain, please:\n"
-                msg += "- Add Gowin toolchain to your $PATH."
+                msg = (
+                    "Unable to find Gowin toolchain, please:\n"
+                    + "- Add Gowin toolchain to your $PATH."
+                )
+
                 raise OSError(msg)
 
             if subprocess.call([gw_sh, "run.tcl"]) != 0:
@@ -183,8 +183,9 @@ class GowinToolchain:
             # Copy Bitstream to from impl to gateware directory.
             copyfile(
                 os.path.join(build_dir, "impl", "pnr", "project.fs"),
-                os.path.join(build_dir, build_name + ".fs")
+                os.path.join(build_dir, f"{build_name}.fs"),
             )
+
 
         os.chdir(cwd)
 
@@ -193,8 +194,7 @@ class GowinToolchain:
     def add_period_constraint(self, platform, clk, period):
         clk.attr.add("keep")
         period = math.floor(period*1e3)/1e3 # round to lowest picosecond
-        if clk in self.clocks:
-            if period != self.clocks[clk]:
-                raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
-                    .format(self.clocks[clk], period))
+        if clk in self.clocks and period != self.clocks[clk]:
+            raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
+                .format(self.clocks[clk], period))
         self.clocks[clk] = period

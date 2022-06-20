@@ -39,10 +39,7 @@ class TMDSEncoder(Module):
         q_m8_n = Signal()
         self.comb += q_m8_n.eq((n1d > 4) | ((n1d == 4) & ~d[0]))
         for i in range(8):
-            if i:
-                curval = curval ^ d[i] ^ q_m8_n
-            else:
-                curval = d[0]
+            curval = curval ^ d[i] ^ q_m8_n if i else d[0]
             self.sync += q_m[i].eq(curval)
         self.sync += q_m[8].eq(~q_m8_n)
 
@@ -61,7 +58,7 @@ class TMDSEncoder(Module):
 
         s_c  = self.c
         s_de = self.de
-        for p in range(3):
+        for _ in range(3):
             new_c = Signal(2)
             new_de = Signal()
             self.sync += new_c.eq(s_c), new_de.eq(s_de)

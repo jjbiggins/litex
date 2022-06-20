@@ -47,9 +47,8 @@ class CortexM3(CPU):
     # GCC Flags.
     @property
     def gcc_flags(self):
-        flags =  f" -march=armv7-m -mthumb"
-        flags += f" -D__CortexM3__"
-        flags += f" -DUART_POLLING"
+        flags = " -march=armv7-m -mthumb" + " -D__CortexM3__"
+        flags += " -DUART_POLLING"
         return flags
 
     def __init__(self, platform, variant="standard"):

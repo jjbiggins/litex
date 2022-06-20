@@ -102,23 +102,25 @@ class USBOHCI(Module):
         netlist_name = self.get_netlist_name()
 
         print(f"USB OHCI netlist : {netlist_name}")
-        if not os.path.exists(os.path.join(vdir, netlist_name + ".v")):
+        if not os.path.exists(os.path.join(vdir, f"{netlist_name}.v")):
             self.generate_netlist()
 
-        platform.add_source(os.path.join(vdir,  netlist_name + ".v"), "verilog")
+        platform.add_source(os.path.join(vdir, f"{netlist_name}.v"), "verilog")
 
     def generate_netlist(self):
-        print(f"Generating USB OHCI netlist")
+        print("Generating USB OHCI netlist")
         vdir = get_data_mod("misc", "usb_ohci").data_location
-        gen_args = []
-        gen_args.append(f"--port-count={len(self.pads.dp)}")
-        gen_args.append(f"--phy-frequency={self.usb_clk_freq}")
-        gen_args.append(f"--dma-width={self.dma_data_width}")
-        gen_args.append(f"--netlist-name={self.get_netlist_name()}")
+        gen_args = [
+            f"--port-count={len(self.pads.dp)}",
+            f"--phy-frequency={self.usb_clk_freq}",
+            f"--dma-width={self.dma_data_width}",
+            f"--netlist-name={self.get_netlist_name()}",
+        ]
+
         gen_args.append(f"--netlist-directory={vdir}")
 
         cmd = 'cd {path} && sbt "lib/runMain spinal.lib.com.usb.ohci.UsbOhciWishbone {args}"'.format(
             path=os.path.join(vdir, "ext", "SpinalHDL"), args=" ".join(gen_args))
-        print("!!! "   + cmd)
+        print(f"!!! {cmd}")
         if os.system(cmd) != 0:
             raise OSError('Failed to run sbt')

@@ -20,48 +20,50 @@ from litex.build.quicklogic import common
 # IO Constraints (.pcf) ----------------------------------------------------------------------------
 
 def _format_io_pcf(signame, pin, others):
-    r = f"set_io {signame} {Pins(pin).identifiers[0]}\n"
-    return r
+    return f"set_io {signame} {Pins(pin).identifiers[0]}\n"
 
 def _build_io_pcf(named_sc, named_pc, build_name):
     pcf = ""
     for sig, pins, others, resname in named_sc:
         if len(pins) > 1:
             for i, p in enumerate(pins):
-                pcf += _format_io_pcf(sig + "(" + str(i) + ")", p, others)
+                pcf += _format_io_pcf(f"{sig}({str(i)})", p, others)
         else:
             pcf += _format_io_pcf(sig, pins[0], others)
-    tools.write_to_file(build_name + ".pcf", pcf)
+    tools.write_to_file(f"{build_name}.pcf", pcf)
 
 # Build Makefile -----------------------------------------------------------------------------------
 
 def _build_makefile(platform, sources, build_dir, build_name):
-    makefile = []
+    makefile = [
+        "mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))",
+        "current_dir := $(patsubst %/,%,$(dir $(mkfile_path)))",
+        f"TOP_F={build_name}",
+        "all: {top}_bit.h {top}.bin build/{top}.bit".format(top=build_name),
+        f"build/{build_name}.bit:",
+        "\tql_symbiflow -compile -d {device} -P {part} -v {verilog} -t {top} -p {pcf}".format(
+            device=platform.device,
+            part={"ql-eos-s3": "PU64"}.get(platform.device),
+            verilog=f"{build_name}.v",
+            top=build_name,
+            pcf=f"{build_name}.pcf",
+        ),
+    ]
 
-    # Define Paths.
-    makefile.append("mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))")
-    makefile.append("current_dir := $(patsubst %/,%,$(dir $(mkfile_path)))")
-    # bit -> h and bit -> bin requires TOP_F
-    makefile.append(f"TOP_F={build_name}")
 
-    # Create Project.
-    # FIXME: Only use top file for now and ignore .init files.
-    makefile.append("all: {top}_bit.h {top}.bin build/{top}.bit".format(top=build_name))
-    # build bit file (default)
-    makefile.append(f"build/{build_name}.bit:")
-    makefile.append("\tql_symbiflow -compile -d {device} -P {part} -v {verilog} -t {top} -p {pcf}".format(
-        device  = platform.device,
-        part    = {"ql-eos-s3": "PU64"}.get(platform.device),
-        verilog = f"{build_name}.v",
-        top     = build_name,
-        pcf     = f"{build_name}.pcf"
-    ))
-    # build header to include in CPU firmware
-    makefile.append("{top}_bit.h: build/{top}.bit".format(top=build_name))
-    makefile.append(f"\t(cd build; TOP_F=$(TOP_F) symbiflow_write_bitheader)")
-    # build binary to write in dedicated FLASH area
-    makefile.append("{top}.bin: build/{top}.bit".format(top=build_name))
-    makefile.append(f"\t(cd build; TOP_F=$(TOP_F) symbiflow_write_binary)")
+    makefile.extend(
+        (
+            "{top}_bit.h: build/{top}.bit".format(top=build_name),
+            f"\t(cd build; TOP_F=$(TOP_F) symbiflow_write_bitheader)",
+        )
+    )
+
+    makefile.extend(
+        (
+            "{top}.bin: build/{top}.bit".format(top=build_name),
+            f"\t(cd build; TOP_F=$(TOP_F) symbiflow_write_binary)",
+        )
+    )
 
     # Generate Makefile.
     tools.write_to_file("Makefile", "\n".join(makefile))
@@ -70,8 +72,11 @@ def _run_make():
     make_cmd = ["make", "-j1"]
 
     if which("ql_symbiflow") is None:
-        msg = "Unable to find QuickLogic Symbiflow toolchain, please:\n"
-        msg += "- Add QuickLogic Symbiflow toolchain to your $PATH."
+        msg = (
+            "Unable to find QuickLogic Symbiflow toolchain, please:\n"
+            + "- Add QuickLogic Symbiflow toolchain to your $PATH."
+        )
+
         raise OSError(msg)
 
     if subprocess.call(make_cmd) != 0:
@@ -86,7 +91,7 @@ class SymbiflowToolchain:
     special_overrides = common.quicklogic_special_overrides
 
     def __init__(self):
-        self.clocks      = dict()
+        self.clocks = {}
         self.false_paths = set()
 
     def build(self, platform, fragment,
@@ -108,7 +113,7 @@ class SymbiflowToolchain:
         # Generate verilog.
         v_output = platform.get_verilog(fragment, name=build_name, **kwargs)
         named_sc, named_pc = platform.resolve_signals(v_output.ns)
-        top_file = build_name + ".v"
+        top_file = f"{build_name}.v"
         v_output.write(top_file)
         platform.add_source(top_file)
 

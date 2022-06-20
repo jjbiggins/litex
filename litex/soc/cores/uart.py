@@ -197,20 +197,16 @@ class RS232PHYModel(Module):
 # UART ---------------------------------------------------------------------------------------------
 
 def _get_uart_fifo(depth, sink_cd="sys", source_cd="sys"):
-    if sink_cd != source_cd:
-        fifo = stream.AsyncFIFO([("data", 8)], depth)
-        return ClockDomainsRenamer({"write": sink_cd, "read": source_cd})(fifo)
-    else:
+    if sink_cd == source_cd:
         return stream.SyncFIFO([("data", 8)], depth, buffered=True)
+    fifo = stream.AsyncFIFO([("data", 8)], depth)
+    return ClockDomainsRenamer({"write": sink_cd, "read": source_cd})(fifo)
 
 def UARTPHY(pads, clk_freq, baudrate):
-    # FT245 Asynchronous FIFO mode (baudrate ignored)
-    if hasattr(pads, "rd_n") and hasattr(pads, "wr_n"):
-        from litex.soc.cores.usb_fifo import FT245PHYAsynchronous
-        return FT245PHYAsynchronous(pads, clk_freq)
-    # RS232
-    else:
+    if not hasattr(pads, "rd_n") or not hasattr(pads, "wr_n"):
         return  RS232PHY(pads, clk_freq, baudrate)
+    from litex.soc.cores.usb_fifo import FT245PHYAsynchronous
+    return FT245PHYAsynchronous(pads, clk_freq)
 
 class UART(Module, AutoCSR, UARTInterface):
     def __init__(self, phy=None,
@@ -406,9 +402,11 @@ class Stream2Wishbone(Module):
                 NextState("SEND-DATA")
             )
         )
-        cases = {}
-        for i, n in enumerate(reversed(range(data_width//8))):
-            cases[i] = source.data.eq(data[8*n:])
+        cases = {
+            i: source.data.eq(data[8 * n :])
+            for i, n in enumerate(reversed(range(data_width // 8)))
+        }
+
         self.comb += Case(data_bytes_count, cases)
         fsm.act("SEND-DATA",
             sink.ready.eq(0),
@@ -459,12 +457,11 @@ class UARTMultiplexer(Module):
 
         # # #
 
-        cases = {}
-        for n in range(len(uarts)):
-            cases[n] = [
-                uart.tx.eq(uarts[n].tx),
-                uarts[n].rx.eq(uart.rx)
-            ]
+        cases = {
+            n: [uart.tx.eq(uarts[n].tx), uarts[n].rx.eq(uart.rx)]
+            for n in range(len(uarts))
+        }
+
         self.comb += Case(self.sel, cases)
 
 # UART Crossover -----------------------------------------------------------------------------------
@@ -477,7 +474,7 @@ class UARTCrossover(UART):
     UART, cross-connected to the main one to allow terminal emulation over a Wishbone bridge.
     """
     def __init__(self, **kwargs):
-        assert kwargs.get("phy", None) == None
+        assert kwargs.get("phy", None) is None
         UART.__init__(self, **kwargs)
         self.submodules.xover = UART(tx_fifo_depth=1, rx_fifo_depth=16, rx_fifo_rx_we=True)
         self.comb += [

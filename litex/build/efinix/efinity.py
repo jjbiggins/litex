@@ -29,11 +29,14 @@ from litex.build.efinix import InterfaceWriter
 
 def get_pin_direction(fragment, platform, pinname):
     pins = platform.constraint_manager.get_io_signals()
-    for pin in sorted(pins, key=lambda x: x.duid):
-        # Better idea ???
-        if (pinname.split("[")[0] == pin.name):
-            return pin.direction
-    return "Unknown"
+    return next(
+        (
+            pin.direction
+            for pin in sorted(pins, key=lambda x: x.duid)
+            if (pinname.split("[")[0] == pin.name)
+        ),
+        "Unknown",
+    )
 
 # Timing Constraints (.sdc) ------------------------------------------------------------------------
 
@@ -48,28 +51,28 @@ def _build_sdc(clocks, false_paths, vns, named_sc, build_name, additional_sdc_co
                 is_port = True
         if is_port:
             tpl = "create_clock -name {clk} -period {period} [get_ports {{{clk}}}]"
-            sdc.append(tpl.format(clk=vns.get_name(clk), period=str(period)))
         else:
             tpl = "create_clock -name {clk} -period {period} [get_nets {{{clk}}}]"
-            sdc.append(tpl.format(clk=vns.get_name(clk), period=str(period)))
-
+        sdc.append(tpl.format(clk=vns.get_name(clk), period=str(period)))
+    tpl = "set_false_path -from [get_clocks {{{from_}}}] -to [get_clocks {{{to}}}]"
     # False path constraints
-    for from_, to in sorted(false_paths, key=lambda x: (x[0].duid, x[1].duid)):
-        tpl = "set_false_path -from [get_clocks {{{from_}}}] -to [get_clocks {{{to}}}]"
-        sdc.append(tpl.format(from_=vns.get_name(from_), to=vns.get_name(to)))
+    sdc.extend(
+        tpl.format(from_=vns.get_name(from_), to=vns.get_name(to))
+        for from_, to in sorted(
+            false_paths, key=lambda x: (x[0].duid, x[1].duid)
+        )
+    )
 
     # Add additional commands
     sdc += additional_sdc_commands
 
     # Generate .sdc
-    tools.write_to_file("{}.sdc".format(build_name), "\n".join(sdc))
+    tools.write_to_file(f"{build_name}.sdc", "\n".join(sdc))
 
 # Peripheral configuration (.xml) ------------------------------------------------------------------
 
 def _create_gpio_instance(fragment, platform, sig, pins):
-    l = ""
-    if len(pins) > 1:
-        l = ",{},0".format(len(pins) - 1)
+    l = f",{len(pins) - 1},0" if len(pins) > 1 else ""
     d = get_pin_direction(fragment, platform, sig)
     return 'design.create_{d}_gpio("{name}"{len})'.format(d=d, name=sig, len=l)
 
@@ -79,9 +82,7 @@ def _format_constraint(c, signame, fmt_r, fragment, platform):
         tpl = 'design.assign_pkg_pin("{signame}","{pin}")\n'
         return tpl.format(signame=signame, name=fmt_r, pin=c.identifiers[0])
 
-    # IO standard property
     elif isinstance(c, IOStandard):
-        prop = ""
         valid = [ "3.3_V_LVTTL_/_LVCMOS", "2.5_V_LVCMOS", "1.8_V_LVCMOS",
                   "1.2_V_Differential_HSTL", "1.2_V_Differential_SSTL",
                   "1.2_V_HSTL", "1.2_V_LVCMOS", "1.2_V_SSTL", "1.5_V_Differential_HSTL",
@@ -91,19 +92,16 @@ def _format_constraint(c, signame, fmt_r, fragment, platform):
                   "3.0_V_LVTTL", "3.3_V_LVCMOS", "3.3_V_LVTTL"
         ]
 
-        if c.name in valid:
-            prop = "IO_STANDARD"
-
-        if prop == "":
-            print("{} has a wrong IOStandard format [{}]".format(signame, c.name))
-            print("Sould be selected from {}\n".format(valid))
+        prop = "IO_STANDARD" if c.name in valid else ""
+        if not prop:
+            print(f"{signame} has a wrong IOStandard format [{c.name}]")
+            print(f"Sould be selected from {valid}\n")
             # Print error, warning ??
             return ""
 
         tpl = 'design.set_property(  "{signame}","{prop}","{val}")\n'
         return tpl.format(signame=signame, prop=prop, val=c.name)
 
-    # Others constraints
     elif isinstance(c, Misc):
         prop = ""
         if c.misc in ["WEAK_PULLUP", "WEAK_PULLDOWN"]:
@@ -118,7 +116,7 @@ def _format_constraint(c, signame, fmt_r, fragment, platform):
             prop = "SLEW_RATE"
             val = "1"
 
-        if prop == "":
+        if not prop:
             # Print error, warning ??
             return ""
 
@@ -128,7 +126,7 @@ def _format_constraint(c, signame, fmt_r, fragment, platform):
 def _format_conf_constraint(signame, pin, others, resname, fragment, platform):
     fmt_r = "{}:{}".format(*resname[:2])
     if resname[2] is not None:
-        fmt_r += "." + resname[2]
+        fmt_r += f".{resname[2]}"
     fmt_c = [_format_constraint(c, signame, fmt_r, fragment, platform) for c in ([Pins(pin)] + others)]
     return "".join(fmt_c)
 
@@ -138,20 +136,26 @@ def _build_iface_gpio(named_sc, named_pc, fragment, platform, excluded_ios):
 
     # GPIO
     for sig, pins, others, resname in named_sc:
-        excluded = False
-        for excluded_io in excluded_ios:
-            if isinstance(excluded_io, str):
-                if sig == excluded_io:
-                    excluded = True
-            elif isinstance(excluded_io, Signal):
-                if sig == excluded_io.name:
-                    excluded = True
+        excluded = any(
+            isinstance(excluded_io, str)
+            and sig == excluded_io
+            or not isinstance(excluded_io, str)
+            and isinstance(excluded_io, Signal)
+            and sig == excluded_io.name
+            for excluded_io in excluded_ios
+        )
+
         if excluded:
             continue
         inst.append(_create_gpio_instance(fragment, platform, sig, pins))
         if len(pins) > 1:
-            for i, p in enumerate(pins):
-                conf.append(_format_conf_constraint("{}[{}]".format(sig, i), p, others, resname, fragment, platform))
+            conf.extend(
+                _format_conf_constraint(
+                    f"{sig}[{i}]", p, others, resname, fragment, platform
+                )
+                for i, p in enumerate(pins)
+            )
+
         else:
             conf.append(_format_conf_constraint(sig, pins[0], others, resname, fragment, platform))
     if named_pc:
@@ -173,7 +177,12 @@ def _build_peri(efinity_path, build_name, device, named_sc, named_pc, fragment, 
 
     tools.write_to_file("iface.py", header + gen + gpio + add + footer)
 
-    if tools.subprocess_call_filtered([efinity_path + "/bin/python3", "iface.py"], common.colors) != 0:
+    if (
+        tools.subprocess_call_filtered(
+            [f"{efinity_path}/bin/python3", "iface.py"], common.colors
+        )
+        != 0
+    ):
         raise OSError("Error occurred during Efinity peri script execution.")
 
 
@@ -224,7 +233,7 @@ def _build_xml(family, device, timing_model, build_name, sources):
     xml_str = et.tostring(root, "utf-8")
     xml_str = expatbuilder.parseString(xml_str, False)
     xml_str = xml_str.toprettyxml(indent="  ")
-    tools.write_to_file("{}.xml".format(build_name), xml_str)
+    tools.write_to_file(f"{build_name}.xml", xml_str)
 
 # Efinity Toolchain --------------------------------------------------------------------------------
 
@@ -233,7 +242,7 @@ class EfinityToolchain:
 
     def __init__(self, efinity_path):
         self.options                   = {}
-        self.clocks                    = dict()
+        self.clocks = {}
         self.false_paths               = set()
         self.efinity_path              = efinity_path
         self.ifacewriter               = InterfaceWriter(efinity_path)
@@ -271,7 +280,7 @@ class EfinityToolchain:
         if platform.verilog_include_paths:
             self.options["includ_path"] = "{" + ";".join(platform.verilog_include_paths) + "}"
 
-        os.environ["EFXPT_HOME"] = self.efinity_path + "/pt"
+        os.environ["EFXPT_HOME"] = f"{self.efinity_path}/pt"
 
         # Generate Design Timing Constraints file (.sdc)
         named_sc, named_pc = platform.resolve_signals(v_output.ns)
@@ -319,83 +328,153 @@ class EfinityToolchain:
         # Run
         if run:
             # Synthesis/Mapping.
-            r = tools.subprocess_call_filtered([self.efinity_path + "/bin/efx_map",
-                "--project",                    f"{build_name}",
-                "--root",                       f"{build_name}",
-                "--write-efx-verilog",          f"outflow/{build_name}.map.v",
-                "--write-premap-module",        f"outflow/{build_name}.elab.vdb",
-                "--binary-db",                  f"{build_name}.vdb",
-                "--family",                     platform.family,
-                "--device",                     platform.device,
-                "--mode",                       "speed",
-                "--max_ram",                    "-1",
-                "--max_mult",                   "-1",
-                "--infer-clk-enable",           "3",
-                "--infer-sync-set-reset",       "1",
-                "--fanout-limit",               "0",
-                "--bram_output_regs_packing",   "1",
-                "--retiming",                   "1",
-                "--seq_opt",                    "1",
-                "--blast_const_operand_adders", "1",
-                "--mult_input_regs_packing",    "1",
-                "--mult_output_regs_packing",   "1",
-                "--veri_option",                "verilog_mode=verilog_2k,vhdl_mode=vhdl_2008",
-                "--work-dir",                   "work_syn",
-                "--output-dir",                 "outflow",
-                "--project-xml",                f"{build_name}.xml",
-                "--I",                          "./"
-            ], common.colors)
+            r = tools.subprocess_call_filtered(
+                [
+                    f"{self.efinity_path}/bin/efx_map",
+                    "--project",
+                    f"{build_name}",
+                    "--root",
+                    f"{build_name}",
+                    "--write-efx-verilog",
+                    f"outflow/{build_name}.map.v",
+                    "--write-premap-module",
+                    f"outflow/{build_name}.elab.vdb",
+                    "--binary-db",
+                    f"{build_name}.vdb",
+                    "--family",
+                    platform.family,
+                    "--device",
+                    platform.device,
+                    "--mode",
+                    "speed",
+                    "--max_ram",
+                    "-1",
+                    "--max_mult",
+                    "-1",
+                    "--infer-clk-enable",
+                    "3",
+                    "--infer-sync-set-reset",
+                    "1",
+                    "--fanout-limit",
+                    "0",
+                    "--bram_output_regs_packing",
+                    "1",
+                    "--retiming",
+                    "1",
+                    "--seq_opt",
+                    "1",
+                    "--blast_const_operand_adders",
+                    "1",
+                    "--mult_input_regs_packing",
+                    "1",
+                    "--mult_output_regs_packing",
+                    "1",
+                    "--veri_option",
+                    "verilog_mode=verilog_2k,vhdl_mode=vhdl_2008",
+                    "--work-dir",
+                    "work_syn",
+                    "--output-dir",
+                    "outflow",
+                    "--project-xml",
+                    f"{build_name}.xml",
+                    "--I",
+                    "./",
+                ],
+                common.colors,
+            )
+
             if r != 0:
                 raise OSError("Error occurred during efx_map execution.")
 
             # Place and Route.
-            r = tools.subprocess_call_filtered([self.efinity_path + "/bin/python3",
-                self.efinity_path + "/scripts/efx_run_pt.py",
-                f"{build_name}",
-                platform.family,
-                platform.device
-            ], common.colors)
+            r = tools.subprocess_call_filtered(
+                [
+                    f"{self.efinity_path}/bin/python3",
+                    f"{self.efinity_path}/scripts/efx_run_pt.py",
+                    f"{build_name}",
+                    platform.family,
+                    platform.device,
+                ],
+                common.colors,
+            )
+
             if r != 0:
                raise OSError("Error occurred during efx_run_pt execution.")
 
-            r = tools.subprocess_call_filtered([self.efinity_path + "/bin/efx_pnr",
-                "--circuit",              f"{build_name}",
-                "--family",               platform.family,
-                "--device",               platform.device,
-                "--operating_conditions", platform.timing_model,
-                "--pack",
-                "--place",
-                "--route",
-                "--vdb_file",             f"work_syn/{build_name}.vdb",
-                "--use_vdb_file",         "on",
-                "--place_file",           f"outflow/{build_name}.place",
-                "--route_file",           f"outflow/{build_name}.route",
-                "--sdc_file",             f"{build_name}.sdc",
-                "--sync_file",            f"outflow/{build_name}.interface.csv",
-                "--seed",                 "1",
-                "--work_dir",             "work_pnr",
-                "--output_dir",           "outflow",
-                "--timing_analysis",      "on",
-                "--load_delay_matrix"
-            ], common.colors)
+            r = tools.subprocess_call_filtered(
+                [
+                    f"{self.efinity_path}/bin/efx_pnr",
+                    "--circuit",
+                    f"{build_name}",
+                    "--family",
+                    platform.family,
+                    "--device",
+                    platform.device,
+                    "--operating_conditions",
+                    platform.timing_model,
+                    "--pack",
+                    "--place",
+                    "--route",
+                    "--vdb_file",
+                    f"work_syn/{build_name}.vdb",
+                    "--use_vdb_file",
+                    "on",
+                    "--place_file",
+                    f"outflow/{build_name}.place",
+                    "--route_file",
+                    f"outflow/{build_name}.route",
+                    "--sdc_file",
+                    f"{build_name}.sdc",
+                    "--sync_file",
+                    f"outflow/{build_name}.interface.csv",
+                    "--seed",
+                    "1",
+                    "--work_dir",
+                    "work_pnr",
+                    "--output_dir",
+                    "outflow",
+                    "--timing_analysis",
+                    "on",
+                    "--load_delay_matrix",
+                ],
+                common.colors,
+            )
+
             if r != 0:
                 raise OSError("Error occurred during efx_pnr execution.")
 
             # Bitstream.
-            r = tools.subprocess_call_filtered([self.efinity_path + "/bin/efx_pgm",
-                "--source",                   f"work_pnr/{build_name}.lbf",
-                "--dest",                     f"{build_name}.hex",
-                "--device",                   platform.device,
-                "--family",                   platform.family,
-                "--periph",                   f"outflow/{build_name}.lpf",
-                "--oscillator_clock_divider", "DIV8",
-                "--spi_low_power_mode",       "off",
-                "--io_weak_pullup",           "on",
-                "--enable_roms",              "on",
-                "--mode",                     "active",
-                "--width",                    "1",
-                "--enable_crc_check",         "on"
-            ], common.colors)
+            r = tools.subprocess_call_filtered(
+                [
+                    f"{self.efinity_path}/bin/efx_pgm",
+                    "--source",
+                    f"work_pnr/{build_name}.lbf",
+                    "--dest",
+                    f"{build_name}.hex",
+                    "--device",
+                    platform.device,
+                    "--family",
+                    platform.family,
+                    "--periph",
+                    f"outflow/{build_name}.lpf",
+                    "--oscillator_clock_divider",
+                    "DIV8",
+                    "--spi_low_power_mode",
+                    "off",
+                    "--io_weak_pullup",
+                    "on",
+                    "--enable_roms",
+                    "on",
+                    "--mode",
+                    "active",
+                    "--width",
+                    "1",
+                    "--enable_crc_check",
+                    "on",
+                ],
+                common.colors,
+            )
+
             if r != 0:
                 raise OSError("Error occurred during efx_pgm execution.")
 
@@ -406,10 +485,9 @@ class EfinityToolchain:
     def add_period_constraint(self, platform, clk, period):
         clk.attr.add("keep")
         period = math.floor(period*1e3)/1e3 # round to lowest picosecond
-        if clk in self.clocks:
-            if period != self.clocks[clk]:
-                raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
-                    .format(self.clocks[clk], period))
+        if clk in self.clocks and period != self.clocks[clk]:
+            raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
+                .format(self.clocks[clk], period))
         self.clocks[clk] = period
 
     def add_false_path_constraint(self, platform, from_, to):

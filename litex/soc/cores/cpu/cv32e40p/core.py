@@ -78,9 +78,9 @@ def add_manifest_sources(platform, manifest):
             res = re.search('\$\{DESIGN_RTL_DIR\}/(.+)', l)
             if res and not re.match('//', l):
                 if re.match('\+incdir\+', l):
-                    platform.add_verilog_include_path(os.path.join(basedir, 'rtl', res.group(1)))
+                    platform.add_verilog_include_path(os.path.join(basedir, 'rtl', res[1]))
                 else:
-                    platform.add_source(os.path.join(basedir, 'rtl', res.group(1)))
+                    platform.add_source(os.path.join(basedir, 'rtl', res[1]))
 
 # OBI <> Wishbone ----------------------------------------------------------------------------------
 

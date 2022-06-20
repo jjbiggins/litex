@@ -31,7 +31,7 @@ class GowinPlatform(GenericPlatform):
 
     def get_verilog(self, *args, special_overrides=dict(), **kwargs):
         so = dict(common.gowin_special_overrides)
-        so.update(special_overrides)
+        so |= special_overrides
         return GenericPlatform.get_verilog(self, *args,
             special_overrides = so,
             attr_translate    = self.toolchain.attr_translate,

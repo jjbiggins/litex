@@ -86,9 +86,9 @@ class ECP5PLL(Module):
                                 clk_freq = vco_freq/d
                                 # If output is valid, save config.
                                 if abs(clk_freq - f) <= f*m:
-                                    config["clko{}_freq".format(n)]  = clk_freq
-                                    config["clko{}_div".format(n)]   = d
-                                    config["clko{}_phase".format(n)] = p
+                                    config[f"clko{n}_freq"] = clk_freq
+                                    config[f"clko{n}_div"] = d
+                                    config[f"clko{n}_phase"] = p
                                     valid = True
                                     # Check if ouptut can be used as feedback, if so use it.
                                     # (We cannot use clocks with dynamic phase adjustment enabled)

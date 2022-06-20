@@ -96,5 +96,5 @@ class GenericProgrammer:
             msg = f"Error occured during {self.__class__.__name__}'s call, please check:\n"
             msg += f"- {self.__class__.__name__} installation.\n"
             msg += f"- access permissions.\n"
-            msg += f"- hardware and cable."
+            msg += "- hardware and cable."
             raise OSError(msg)

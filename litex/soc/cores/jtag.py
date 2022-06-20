@@ -21,14 +21,10 @@ class JTAGTAPFSM(Module):
         self.submodules.fsm = fsm = FSM(reset_state="TEST_LOGIC_RESET")
 
         def JTAGTAPFSMState(name, transitions={}):
-            logic = []
-
             # Transitions logic.
-            nextstates = {}
-            nextstates[0] = NextState(transitions.get(0, name))
+            nextstates = {0: NextState(transitions.get(0, name))}
             nextstates[1] = NextState(transitions.get(1, name))
-            logic.append(Case(tms, nextstates))
-
+            logic = [Case(tms, nextstates)]
             # Ongoing logic.
             ongoing = Signal()
             setattr(self, name, ongoing)
@@ -319,10 +315,7 @@ class XilinxJTAG(Module):
     def get_tdi_delay(device):
         # Input delay if 1 TCK on TDI on Zynq/ZynqMPSoC devices.
         delay_dict = {"xc7z" : 1, "xczu" : 1}
-        for dev, delay in delay_dict.items():
-            if device.lower().startswith(dev):
-                return 1
-        return 0
+        return next((1 for dev in delay_dict if device.lower().startswith(dev)), 0)
 
 # ECP5 JTAG ----------------------------------------------------------------------------------------
 
@@ -361,7 +354,7 @@ class ECP5JTAG(Module):
 
         # TDI/TCK are synchronous on JTAGG output (TDI being registered with TCK). Introduce a delay
         # on TCK with multiple LUT4s to allow its use as the JTAG Clk.
-        for i in range(tck_delay_luts):
+        for _ in range(tck_delay_luts):
             new_tck = Signal()
             self.specials += Instance("LUT4",
                 attr   = {"keep"},

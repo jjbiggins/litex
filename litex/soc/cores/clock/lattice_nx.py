@@ -129,7 +129,7 @@ class NXPLL(Module):
         self.nclkouts   = 0
         self.clkouts    = {}
         self.config     = {}
-        self.name       = 'PLL_' + str(NXPLL.instance_num)
+        self.name = f'PLL_{str(NXPLL.instance_num)}'
         NXPLL.instance_num += 1
         self.platform   = platform
         self.create_output_port_clocks = create_output_port_clocks
@@ -172,9 +172,9 @@ class NXPLL(Module):
                         for d in range(*self.clko_div_range):
                             clk_freq = vco_freq/d
                             if abs(clk_freq - f) <= f*m:
-                                config["clko{}_freq".format(n)]  = clk_freq
-                                config["clko{}_div".format(n)]   = d
-                                config["clko{}_phase".format(n)] = p
+                                config[f"clko{n}_freq"] = clk_freq
+                                config[f"clko{n}_div"] = d
+                                config[f"clko{n}_phase"] = p
                                 valid = True
                                 break
                         if not valid:
@@ -189,18 +189,16 @@ class NXPLL(Module):
         raise ValueError("No PLL config found")
 
     def calculate_analog_parameters(self, clki_freq, fb_div, bw_factor = 5):
-        config = {}
-
         params = self.calc_optimal_params(clki_freq, fb_div, 1, bw_factor)
-        config["p_CSET"]            = params["CSET"]
-        config["p_CRIPPLE"]         = params["CRIPPLE"]
-        config["p_V2I_PP_RES"]      = params["V2I_PP_RES"]
-        config["p_IPP_SEL"]         = params["IPP_SEL"]
-        config["p_IPP_CTRL"]        = params["IPP_CTRL"]
-        config["p_BW_CTL_BIAS"]     = params["BW_CTL_BIAS"]
-        config["p_IPI_CMP"]         = params["IPI_CMP"]
-
-        return config
+        return {
+            "p_CSET": params["CSET"],
+            "p_CRIPPLE": params["CRIPPLE"],
+            "p_V2I_PP_RES": params["V2I_PP_RES"],
+            "p_IPP_SEL": params["IPP_SEL"],
+            "p_IPP_CTRL": params["IPP_CTRL"],
+            "p_BW_CTL_BIAS": params["BW_CTL_BIAS"],
+            "p_IPI_CMP": params["IPI_CMP"],
+        }
 
     def do_finalize(self):
         config = self.compute_config()
@@ -243,21 +241,24 @@ class NXPLL(Module):
         n_to_l = {0: "P", 1: "S", 2: "S2", 3:"S3", 4:"S4"}
 
         for n, (clk, f, p, m) in sorted(self.clkouts.items()):
-            div    = config["clko{}_div".format(n)]
+            div = config[f"clko{n}_div"]
             phase = int((1+p/360) * div)
             letter = chr(n+65)
-            self.params["p_ENCLK_CLKO{}".format(n_to_l[n])] = "ENABLED"
-            self.params["p_DIV{}".format(letter)] = str(div-1)
-            self.params["p_PHI{}".format(letter)] = "0"
-            self.params["p_DEL{}".format(letter)] = str(phase - 1)
-            self.params["o_CLKO{}".format(n_to_l[n])] = clk
+            self.params[f"p_ENCLK_CLKO{n_to_l[n]}"] = "ENABLED"
+            self.params[f"p_DIV{letter}"] = str(div-1)
+            self.params[f"p_PHI{letter}"] = "0"
+            self.params[f"p_DEL{letter}"] = str(phase - 1)
+            self.params[f"o_CLKO{n_to_l[n]}"] = clk
 
             # In theory this really shouldn't be necessary, in practice
             # the tooling seems to have suspicous clock latency values
             # on generated clocks that are causing timing problems and Lattice
             # hasn't responded to my support requests on the matter.
             if self.platform and self.create_output_port_clocks:
-                self.platform.add_platform_command("create_clock -period {} -name {} [get_pins {}.PLL_inst/CLKO{}]".format(str(1/f*1e9), self.name + "_" + n_to_l[n],self.name, n_to_l[n]))
+                self.platform.add_platform_command(
+                    f"create_clock -period {str(1/f*1e9)} -name {self.name}_{n_to_l[n]} [get_pins {self.name}.PLL_inst/CLKO{n_to_l[n]}]"
+                )
+
 
         if self.platform and self.create_output_port_clocks:
             i = 0
@@ -272,9 +273,21 @@ class NXPLL(Module):
 
     # Later revs of the Lattice calculator BW_FACTOR is set to 10, may need to change it
     def calc_optimal_params(self, fref, fbkdiv, M = 1, BW_FACTOR = 5):
-        print("Calculating Analog Paramters for a reference freqeuncy of " + str(fref*1e-6) +
-              " Mhz, feedback div " + str(fbkdiv) + ", and input div " + str(M) + "."
+        print(
+            (
+                (
+                    (
+                        f"Calculating Analog Paramters for a reference freqeuncy of {str(fref*1e-6)}"
+                        + " Mhz, feedback div "
+                    )
+                    + str(fbkdiv)
+                    + ", and input div "
+                )
+                + str(M)
+                + "."
+            )
         )
+
 
         best_params = None
         best_3db = 0
@@ -307,17 +320,16 @@ class NXPLL(Module):
 
     def numerical_params_to_HDL_params(self, params):
         IPP_SEL_LUT = {1: 1, 2: 3, 3: 7, 4: 15}
-        ret = {
-            "CRIPPLE": str(int(params.CRIPPLE / 1e-12)) + "P",
-            "CSET": str(int((params.CSET / 4e-12)*4)) + "P",
-            "V2I_PP_RES": "{0:g}".format(params.V2I_PP_RES/1e3).replace(".","P") + "K",
+        return {
+            "CRIPPLE": f"{int(params.CRIPPLE / 1e-12)}P",
+            "CSET": f"{int((params.CSET / 4e-12)*4)}P",
+            "V2I_PP_RES": "{0:g}".format(params.V2I_PP_RES / 1e3).replace(".", "P")
+            + "K",
             "IPP_CTRL": "0b{0:04b}".format(int(params.IPP_CTRL / 1e-6 + 3)),
-            "IPI_CMP": "0b{0:04b}".format(int(params.IPI_CMP / .5e-6)),
+            "IPI_CMP": "0b{0:04b}".format(int(params.IPI_CMP / 0.5e-6)),
             "BW_CTL_BIAS": "0b{0:04b}".format(params.BW_CTL_BIAS),
             "IPP_SEL": "0b{0:04b}".format(IPP_SEL_LUT[params.IPP_SEL]),
         }
-
-        return ret
 
     def calc_valid_io_i2(self):
         # Valid permutations of IPP_CTRL, BW_CTL_BIAS, IPP_SEL, and IPI_CMP paramters are constrained
@@ -350,16 +362,13 @@ class NXPLL(Module):
                             ) )
 
     def is_unique_io(self, io):
-        return not any(x.io == io for x in self.valid_io_i2_permutations)
+        return all(x.io != io for x in self.valid_io_i2_permutations)
 
     def is_valid_io_i2(self, IPP_CTRL, BW_CTL_BIAS, IPP_SEL, IPI_CMP):
         tolerance = 1e-4
         ip = 5.0/3.0 * IPP_CTRL * BW_CTL_BIAS * IPP_SEL
         i2 = IPI_CMP
-        if abs(ip/i2-50) < tolerance:
-            return {'io':ip,'i2':i2}
-        else:
-            return False
+        return {'io':ip,'i2':i2} if abs(ip/i2-50) < tolerance else False
 
     def calc_tf_coefficients(self):
         # Take the permutations of the various analog parameters
@@ -400,6 +409,8 @@ class NXPLL(Module):
 
         self.transfer_func_coefficients = []
 
+        G = k3
+
         # Run through all the permutations and cache it all
         for io_i2 in self.valid_io_i2_permutations:
             for CSET in CSET_VALUES:
@@ -411,8 +422,6 @@ class NXPLL(Module):
                         D = CSET+c3
                         E = io_i2.io*ki*k1
                         F = V2I_PP_RES*CRIPPLE
-                        G = k3
-
                         self.transfer_func_coefficients.append( nx_pll_param_permutation(
                             A*B*F+E*C, # C1
                             A*(F*(G+1)+B)+E*D, # C2
@@ -447,14 +456,14 @@ class NXPLL(Module):
                 peak_f = f
 
             if this_result < last_value and step_divs < 5:
-                f = f/(step**2)
+                f /= step**2
                 step = (step - 1) * .5 + 1
                 step_divs = step_divs + 1
             elif this_result < last_value and step_divs == 5:
                 break
             else:
                 last_value = this_result
-                f = f * step
+                f *= step
 
         return {"peak":peak_value, "peak_freq":peak_f}
 
@@ -470,11 +479,11 @@ class NXPLL(Module):
             tf_value = self.calc_tf(fbkdiv, s, params)
             this_result = 20*log10(abs(tf_value/(1+tf_value)))
 
-            if (this_result+3) < 0 and step_divs < 5:
+            if this_result < -3 and step_divs < 5:
                 f = last_f
                 step = (step - 1) * .5 + 1
                 step_divs = step_divs + 1
-            elif (this_result+3) < 0 and step_divs == 5:
+            elif this_result < -3 and step_divs == 5:
                 break
             else:
                 last_f = f

@@ -27,7 +27,7 @@ class EMIF(Module):
         ba     = Signal(2)
         addr   = Signal(22)
         dqm_n  = Signal(2)
-        data   = self.add_tristate(pads.data) if not hasattr(pads.data, "oe") else pads.data
+        data = pads.data if hasattr(pads.data, "oe") else self.add_tristate(pads.data)
         data_i = Signal(16)
         self.specials += [
             MultiReg(pads.cs_n, cs_n),

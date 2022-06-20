@@ -25,19 +25,18 @@ def tcl_name(name):
 
 def _format_io_constraint(c):
     if isinstance(c, Pins):
-        return "-pin_name {} ".format(c.identifiers[0])
+        return f"-pin_name {c.identifiers[0]} "
     elif isinstance(c, IOStandard):
-        return "-io_std {} ".format(c.name)
+        return f"-io_std {c.name} "
     elif isinstance(c, Misc):
-        return "-RES_PULL {} ".format(c.misc)
+        return f"-RES_PULL {c.misc} "
     else:
         raise NotImplementedError
 
 
 def _format_io_pdc(signame, pin, others):
     fmt_c = [_format_io_constraint(c) for c in ([Pins(pin)] + others)]
-    r = "set_io "
-    r += "-port_name {} ".format(tcl_name(signame))
+    r = "set_io " + f"-port_name {tcl_name(signame)} "
     for c in  ([Pins(pin)] + others):
         r += _format_io_constraint(c)
     r += "-fixed true "
@@ -49,141 +48,171 @@ def _build_io_pdc(named_sc, named_pc, build_name, additional_io_constraints):
     for sig, pins, others, resname in named_sc:
         if len(pins) > 1:
             for i, p in enumerate(pins):
-                pdc += _format_io_pdc(sig + "[" + str(i) + "]", p, others)
+                pdc += _format_io_pdc(f"{sig}[{str(i)}]", p, others)
         else:
             pdc += _format_io_pdc(sig, pins[0], others)
     pdc += "\n".join(additional_io_constraints)
-    tools.write_to_file(build_name + "_io.pdc", pdc)
+    tools.write_to_file(f"{build_name}_io.pdc", pdc)
 
 # Placement Constraints (.pdc) ---------------------------------------------------------------------
 
 def _build_fp_pdc(build_name, additional_fp_constraints):
     pdc = "\n".join(additional_fp_constraints)
-    tools.write_to_file(build_name + "_fp.pdc", pdc)
+    tools.write_to_file(f"{build_name}_fp.pdc", pdc)
 
 # Project (.tcl) -----------------------------------------------------------------------------------
 
 def _build_tcl(platform, sources, build_dir, build_name):
-    tcl = []
+    tcl = [
+        " ".join(
+            [
+                "new_project",
+                "-location {./impl}",
+                f"-name {tcl_name(build_name)}",
+                "-project_description {}",
+                "-block_mode 0",
+                "-standalone_peripheral_initialization 0",
+                "-instantiate_in_smartdesign 1",
+                "-ondemand_build_dh 0",
+                "-use_enhanced_constraint_flow 1",
+                "-hdl {VERILOG}",
+                "-family {PolarFire}",
+                "-die {}",
+                "-package {}",
+                "-speed {}",
+                "-die_voltage {}",
+                "-part_range {}",
+                "-adv_options {}",
+            ]
+        )
+    ]
 
-    # Create project
-    tcl.append(" ".join([
-        "new_project",
-        "-location {./impl}",
-        "-name {}".format(tcl_name(build_name)),
-        "-project_description {}",
-        "-block_mode 0",
-        "-standalone_peripheral_initialization 0",
-        "-instantiate_in_smartdesign 1",
-        "-ondemand_build_dh 0",
-        "-use_enhanced_constraint_flow 1",
-        "-hdl {VERILOG}",
-        "-family {PolarFire}",
-        "-die {}",
-        "-package {}",
-        "-speed {}",
-        "-die_voltage {}",
-        "-part_range {}",
-        "-adv_options {}"
-        ]))
 
     die, package, speed = platform.device.split("-")
-    tcl.append(" ".join([
-        "set_device",
-        "-family {PolarFire}",
-        "-die {}".format(tcl_name(die)),
-        "-package {}".format(tcl_name(package)),
-        "-speed {}".format(tcl_name("-" + speed)),
-        # FIXME: common to all PolarFire devices?
-        "-die_voltage {1.0}",
-        "-part_range {EXT}",
-        "-adv_options {IO_DEFT_STD:LVCMOS 1.8V}",
-        "-adv_options {RESTRICTPROBEPINS:1}",
-        "-adv_options {RESTRICTSPIPINS:0}",
-        "-adv_options {TEMPR:EXT}",
-        "-adv_options {UNUSED_MSS_IO_RESISTOR_PULL:None}",
-        "-adv_options {VCCI_1.2_VOLTR:EXT}",
-        "-adv_options {VCCI_1.5_VOLTR:EXT}",
-        "-adv_options {VCCI_1.8_VOLTR:EXT}",
-        "-adv_options {VCCI_2.5_VOLTR:EXT}",
-        "-adv_options {VCCI_3.3_VOLTR:EXT}",
-        "-adv_options {VOLTR:EXT} "
-    ]))
+    tcl.append(
+        " ".join(
+            [
+                "set_device",
+                "-family {PolarFire}",
+                f"-die {tcl_name(die)}",
+                f"-package {tcl_name(package)}",
+                f'-speed {tcl_name(f"-{speed}")}',
+                "-die_voltage {1.0}",
+                "-part_range {EXT}",
+                "-adv_options {IO_DEFT_STD:LVCMOS 1.8V}",
+                "-adv_options {RESTRICTPROBEPINS:1}",
+                "-adv_options {RESTRICTSPIPINS:0}",
+                "-adv_options {TEMPR:EXT}",
+                "-adv_options {UNUSED_MSS_IO_RESISTOR_PULL:None}",
+                "-adv_options {VCCI_1.2_VOLTR:EXT}",
+                "-adv_options {VCCI_1.5_VOLTR:EXT}",
+                "-adv_options {VCCI_1.8_VOLTR:EXT}",
+                "-adv_options {VCCI_2.5_VOLTR:EXT}",
+                "-adv_options {VCCI_3.3_VOLTR:EXT}",
+                "-adv_options {VOLTR:EXT} ",
+            ]
+        )
+    )
+
 
     # Add sources
     for filename, language, library, *copy in sources:
         filename_tcl = "{" + filename + "}"
-        tcl.append("import_files -hdl_source " + filename_tcl)
+        tcl.append(f"import_files -hdl_source {filename_tcl}")
 
     # Set top level
-    tcl.append("set_root -module {}".format(tcl_name(build_name)))
+    tcl.append(f"set_root -module {tcl_name(build_name)}")
 
     # Copy init files FIXME: support for include path on LiberoSoC?
     for file in os.listdir(build_dir):
         if file.endswith(".init"):
-            tcl.append("file copy -- {} impl/synthesis".format(file))
+            tcl.append(f"file copy -- {file} impl/synthesis")
 
     # Import io constraints
-    tcl.append("import_files -io_pdc {}".format(tcl_name(build_name + "_io.pdc")))
+    tcl.append(f'import_files -io_pdc {tcl_name(f"{build_name}_io.pdc")}')
 
     # Import floorplanner constraints
-    tcl.append("import_files -fp_pdc {}".format(tcl_name(build_name + "_fp.pdc")))
+    tcl.append(f'import_files -fp_pdc {tcl_name(f"{build_name}_fp.pdc")}')
 
     # Import timing constraints
-    tcl.append("import_files -convert_EDN_to_HDL 0 -sdc {}".format(tcl_name(build_name + ".sdc")))
+    tcl.append(
+        f'import_files -convert_EDN_to_HDL 0 -sdc {tcl_name(f"{build_name}.sdc")}'
+    )
+
 
     # Associate constraints with tools
-    tcl.append(" ".join(["organize_tool_files",
-        "-tool {SYNTHESIZE}",
-        "-file impl/constraint/{}.sdc".format(build_name),
-        "-module {}".format(build_name),
-        "-input_type {constraint}"
-    ]))
-    tcl.append(" ".join(["organize_tool_files",
-        "-tool {PLACEROUTE}",
-        "-file impl/constraint/io/{}_io.pdc".format(build_name),
-        "-file impl/constraint/fp/{}_fp.pdc".format(build_name),
-        "-file impl/constraint/{}.sdc".format(build_name),
-        "-module {}".format(build_name),
-        "-input_type {constraint}"
-    ]))
-    tcl.append(" ".join(["organize_tool_files",
-        "-tool {VERIFYTIMING}",
-        "-file impl/constraint/{}.sdc".format(build_name),
-        "-module {}".format(build_name),
-        "-input_type {constraint}"
-    ]))
+    tcl.append(
+        " ".join(
+            [
+                "organize_tool_files",
+                "-tool {SYNTHESIZE}",
+                f"-file impl/constraint/{build_name}.sdc",
+                f"-module {build_name}",
+                "-input_type {constraint}",
+            ]
+        )
+    )
 
-    # Build flow
-    tcl.append("run_tool -name {CONSTRAINT_MANAGEMENT}")
-    tcl.append("run_tool -name {SYNTHESIZE}")
-    tcl.append("run_tool -name {PLACEROUTE}")
-    tcl.append("run_tool -name {GENERATEPROGRAMMINGDATA}")
-    tcl.append("run_tool -name {GENERATEPROGRAMMINGFILE}")
+    tcl.append(
+        " ".join(
+            [
+                "organize_tool_files",
+                "-tool {PLACEROUTE}",
+                f"-file impl/constraint/io/{build_name}_io.pdc",
+                f"-file impl/constraint/fp/{build_name}_fp.pdc",
+                f"-file impl/constraint/{build_name}.sdc",
+                f"-module {build_name}",
+                "-input_type {constraint}",
+            ]
+        )
+    )
+
+    tcl.extend(
+        (
+            " ".join(
+                [
+                    "organize_tool_files",
+                    "-tool {VERIFYTIMING}",
+                    f"-file impl/constraint/{build_name}.sdc",
+                    f"-module {build_name}",
+                    "-input_type {constraint}",
+                ]
+            ),
+            "run_tool -name {CONSTRAINT_MANAGEMENT}",
+            "run_tool -name {SYNTHESIZE}",
+            "run_tool -name {PLACEROUTE}",
+            "run_tool -name {GENERATEPROGRAMMINGDATA}",
+            "run_tool -name {GENERATEPROGRAMMINGFILE}",
+        )
+    )
 
     # Generate tcl
-    tools.write_to_file(build_name + ".tcl", "\n".join(tcl))
+    tools.write_to_file(f"{build_name}.tcl", "\n".join(tcl))
 
 # Timing Constraints (.sdc) ------------------------------------------------------------------------
 
 def _build_timing_sdc(vns, clocks, false_paths, build_name, additional_timing_constraints):
-    sdc = []
+    sdc = [
+        "create_clock -name {clk} -period "
+        + str(period)
+        + " [get_nets {clk}]".format(clk=vns.get_name(clk))
+        for clk, period in sorted(clocks.items(), key=lambda x: x[0].duid)
+    ]
 
-    for clk, period in sorted(clocks.items(), key=lambda x: x[0].duid):
-        sdc.append(
-            "create_clock -name {clk} -period " + str(period) +
-            " [get_nets {clk}]".format(clk=vns.get_name(clk)))
-    for from_, to in sorted(false_paths,
-                            key=lambda x: (x[0].duid, x[1].duid)):
-        sdc.append(
-            "set_clock_groups "
-            "-group [get_clocks -include_generated_clocks -of [get_nets {from_}]] "
-            "-group [get_clocks -include_generated_clocks -of [get_nets {to}]] "
-            "-asynchronous".format(from_=from_, to=to))
+
+    sdc.extend(
+        "set_clock_groups "
+        "-group [get_clocks -include_generated_clocks -of [get_nets {from_}]] "
+        "-group [get_clocks -include_generated_clocks -of [get_nets {to}]] "
+        "-asynchronous".format(from_=from_, to=to)
+        for from_, to in sorted(
+            false_paths, key=lambda x: (x[0].duid, x[1].duid)
+        )
+    )
 
     # generate sdc
     sdc += additional_timing_constraints
-    tools.write_to_file(build_name + ".sdc", "\n".join(sdc))
+    tools.write_to_file(f"{build_name}.sdc", "\n".join(sdc))
 
 # Script -------------------------------------------------------------------------------------------
 
@@ -195,21 +224,21 @@ def _build_script(build_name, device):
         fail_stmt = " || exit /b"
     else:
         script_ext = ".sh"
-        script_contents = "# Autogenerated by LiteX / git: " + tools.get_litex_git_revision() + "\n"
+        script_contents = (
+            f"# Autogenerated by LiteX / git: {tools.get_litex_git_revision()}"
+            + "\n"
+        )
+
         copy_stmt = "cp"
         fail_stmt = " || exit 1"
 
-    script_file = "build_" + build_name + script_ext
+    script_file = f"build_{build_name}{script_ext}"
     tools.write_to_file(script_file, script_contents,
                         force_unix=False)
     return script_file
 
 def _run_script(script):
-    if sys.platform in ["win32", "cygwin"]:
-        shell = ["cmd", "/c"]
-    else:
-        shell = ["bash"]
-
+    shell = ["cmd", "/c"] if sys.platform in ["win32", "cygwin"] else ["bash"]
     if subprocess.call(shell + [script]) != 0:
         raise OSError("Subprocess failed")
 
@@ -221,7 +250,7 @@ class MicrosemiLiberoSoCPolarfireToolchain:
     special_overrides = common.microsemi_polarfire_special_overrides
 
     def __init__(self):
-        self.clocks      = dict()
+        self.clocks = {}
         self.false_paths = set()
         self.additional_io_constraints     = []
         self.additional_fp_constraints     = []
@@ -246,7 +275,7 @@ class MicrosemiLiberoSoCPolarfireToolchain:
         # Generate verilog
         v_output = platform.get_verilog(fragment, name=build_name, **kwargs)
         named_sc, named_pc = platform.resolve_signals(v_output.ns)
-        top_file = build_name + ".v"
+        top_file = f"{build_name}.v"
         v_output.write(top_file)
         platform.add_source(top_file)
 
@@ -278,10 +307,9 @@ class MicrosemiLiberoSoCPolarfireToolchain:
         return v_output.ns
 
     def add_period_constraint(self, platform, clk, period):
-        if clk in self.clocks:
-            if period != self.clocks[clk]:
-                raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
-                    .format(self.clocks[clk], period))
+        if clk in self.clocks and period != self.clocks[clk]:
+            raise ValueError("Clock already constrained to {:.2f}ns, new constraint to {:.2f}ns"
+                .format(self.clocks[clk], period))
         self.clocks[clk] = period
 
     def add_false_path_constraint(self, platform, from_, to):

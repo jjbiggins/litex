@@ -22,9 +22,9 @@ def add_manifest_sources(platform, manifest):
             res = re.search('\$\{CODE_BASE_PATH\}/(.+)', l)
             if res and not re.match('//', l):
                 if re.match('\+incdir\+', l):
-                    platform.add_verilog_include_path(os.path.join(basedir, res.group(1)))
+                    platform.add_verilog_include_path(os.path.join(basedir, res[1]))
                 else:
-                    platform.add_source(os.path.join(basedir, res.group(1)))
+                    platform.add_source(os.path.join(basedir, res[1]))
 
 # OpenC906 -----------------------------------------------------------------------------------------
 
@@ -44,8 +44,7 @@ class OpenC906(CPU):
     # GCC Flags.
     @property
     def gcc_flags(self):
-        flags =  "-mno-save-restore "
-        flags += "-march=rv64gc -mabi=lp64d "
+        flags = "-mno-save-restore " + "-march=rv64gc -mabi=lp64d "
         flags += "-D__openc906__ "
         flags += "-mcmodel=medany"
         return flags

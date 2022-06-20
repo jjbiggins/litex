@@ -22,7 +22,7 @@ from migen import *
 def compute_m_n(k):
     m = 1
     while (2**m < (m + k + 1)):
-        m = m + 1;
+        m += 1;
     n = m + k
     return m, n
 
@@ -31,23 +31,18 @@ def compute_syndrome_positions(m):
     i = 1
     while i <= m:
         r.append(i)
-        i = i << 1
+        i <<= 1
     return r
 
 def compute_data_positions(m):
-    r = []
     e = compute_syndrome_positions(m)
-    for i in range(1, m + 1):
-        if not i in e:
-            r.append(i)
-    return r
+    return [i for i in range(1, m + 1) if i not in e]
 
 def compute_cover_positions(m, p):
     r = []
     i = p
     while i <= m:
-        for j in range(min(p, m - i + 1)):
-            r.append(i + j)
+        r.extend(i + j for j in range(min(p, m - i + 1)))
         i += 2*p
     return r
 
@@ -144,8 +139,7 @@ class ECCDecoder(SECDED, Module):
         self.comb += If(~self.enable, syndrome.eq(0))
 
         # Locate/correct codeword error bit if any and flip it.
-        cases = {}
-        cases["default"] = codeword_c.eq(codeword)
+        cases = {"default": codeword_c.eq(codeword)}
         for i in range(1, 2**len(syndrome)):
             cases[i] = codeword_c.eq(codeword ^ (1<<(i-1)))
         self.comb += Case(syndrome, cases)

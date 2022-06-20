@@ -84,8 +84,8 @@ class NaxRiscv(CPU):
     @property
     def gcc_flags(self):
         flags =  f" -march={NaxRiscv.get_arch()} -mabi={NaxRiscv.get_abi()}"
-        flags += f" -D__NaxRiscv__"
-        flags += f" -DUART_POLLING"
+        flags += " -D__NaxRiscv__"
+        flags += " -DUART_POLLING"
         return flags
 
 
@@ -204,7 +204,7 @@ class NaxRiscv(CPU):
             md5_hash.update(content)
 
         digest = md5_hash.hexdigest()
-        NaxRiscv.netlist_name = "NaxRiscvLitex_" + digest
+        NaxRiscv.netlist_name = f"NaxRiscvLitex_{digest}"
 
 
     @staticmethod
@@ -230,22 +230,21 @@ class NaxRiscv(CPU):
         NaxRiscv.git_setup("NaxRiscv", ndir, "https://github.com/SpinalHDL/NaxRiscv.git"  , "dev" , "8b4449f9")
         NaxRiscv.git_setup("SpinalHDL", sdir, "https://github.com/SpinalHDL/SpinalHDL.git", "dev" , "4c024e93")
 
-        gen_args = []
-        gen_args.append(f"--netlist-name={NaxRiscv.netlist_name}")
-        gen_args.append(f"--netlist-directory={vdir}")
-        gen_args.append(f"--reset-vector={reset_address}")
-        gen_args.append(f"--xlen={NaxRiscv.xlen}")
-        for args in NaxRiscv.scala_args:
-            gen_args.append(f"--scala-args={args}")
-        if(NaxRiscv.jtag_tap) :
-            gen_args.append(f"--with-jtag-tap")
-        if(NaxRiscv.jtag_instruction) :
-            gen_args.append(f"--with-jtag-instruction")
-        if(NaxRiscv.jtag_tap or NaxRiscv.jtag_instruction):
-            gen_args.append(f"--with-debug")
-        for file in NaxRiscv.scala_paths:
-            gen_args.append(f"--scala-file={file}")
+        gen_args = [
+            f"--netlist-name={NaxRiscv.netlist_name}",
+            f"--netlist-directory={vdir}",
+            f"--reset-vector={reset_address}",
+            f"--xlen={NaxRiscv.xlen}",
+        ]
 
+        gen_args.extend(f"--scala-args={args}" for args in NaxRiscv.scala_args)
+        if NaxRiscv.jtag_tap:
+            gen_args.append("--with-jtag-tap")
+        if NaxRiscv.jtag_instruction:
+            gen_args.append("--with-jtag-instruction")
+        if (NaxRiscv.jtag_tap or NaxRiscv.jtag_instruction):
+            gen_args.append("--with-debug")
+        gen_args.extend(f"--scala-file={file}" for file in NaxRiscv.scala_paths)
         cmd = f"""cd {ndir} && sbt "runMain naxriscv.platform.LitexGen {" ".join(gen_args)}\""""
         print("NaxRiscv generation command :")
         print(cmd)
@@ -256,7 +255,7 @@ class NaxRiscv(CPU):
     def add_sources(self, platform):
         vdir = get_data_mod("cpu", "naxriscv").data_location
         print(f"NaxRiscv netlist : {self.netlist_name}")
-        if not os.path.exists(os.path.join(vdir, self.netlist_name + ".v")):
+        if not os.path.exists(os.path.join(vdir, f"{self.netlist_name}.v")):
             self.generate_netlist(self.reset_address)
 
         # Add RAM.
@@ -273,7 +272,7 @@ class NaxRiscv(CPU):
         platform.add_source(os.path.join(vdir, ram_filename), "verilog")
 
         # Add Cluster.
-        platform.add_source(os.path.join(vdir,  self.netlist_name + ".v"), "verilog")
+        platform.add_source(os.path.join(vdir, f"{self.netlist_name}.v"), "verilog")
 
     def add_soc_components(self, soc, soc_region_cls):
         # Set UART/Timer0 CSRs/IRQs to the ones used by OpenSBI.

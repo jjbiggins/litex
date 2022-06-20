@@ -18,7 +18,7 @@ class S6PLL(XilinxClocking):
 
     def __init__(self, speedgrade=-1):
         self.logger = logging.getLogger("S6PLL")
-        self.logger.info("Creating S6PLL, {}.".format(colorer("speedgrade {}".format(speedgrade))))
+        self.logger.info(f'Creating S6PLL, {colorer(f"speedgrade {speedgrade}")}.')
         XilinxClocking.__init__(self)
         self.divclk_divide_range = (1, 52 + 1)
         self.vco_freq_range      = {
@@ -52,10 +52,10 @@ class S6PLL(XilinxClocking):
             o_CLKFBOUT       = pll_fb,
         )
         for n, (clk, f, p, m) in sorted(self.clkouts.items()):
-            self.params["p_CLKOUT{}_DIVIDE".format(n)]     = config["clkout{}_divide".format(n)]
-            self.params["p_CLKOUT{}_PHASE".format(n)]      = float(config["clkout{}_phase".format(n)])
-            self.params["p_CLKOUT{}_DUTY_CYCLE".format(n)] = 0.5
-            self.params["o_CLKOUT{}".format(n)]            = clk
+            self.params[f"p_CLKOUT{n}_DIVIDE"] = config[f"clkout{n}_divide"]
+            self.params[f"p_CLKOUT{n}_PHASE"] = float(config[f"clkout{n}_phase"])
+            self.params[f"p_CLKOUT{n}_DUTY_CYCLE"] = 0.5
+            self.params[f"o_CLKOUT{n}"] = clk
         self.specials += Instance("PLL_ADV", **self.params)
 
 
@@ -67,7 +67,7 @@ class S6DCM(XilinxClocking):
 
     def __init__(self, speedgrade=-1):
         self.logger = logging.getLogger("S6DCM")
-        self.logger.info("Creating S6DCM, {}.".format(colorer("speedgrade {}".format(speedgrade))))
+        self.logger.info(f'Creating S6DCM, {colorer(f"speedgrade {speedgrade}")}.')
         XilinxClocking.__init__(self)
         self.divclk_divide_range = (1, 2) # FIXME
         self.clkin_freq_range = {

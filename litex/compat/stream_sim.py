@@ -41,18 +41,12 @@ def print_with_prefix(s, prefix=""):
 
 
 def seed_to_data(seed, random=True):
-    if random:
-        return (seed * 0x31415979 + 1) & 0xffffffff
-    else:
-        return seed
+    return (seed * 0x31415979 + 1) & 0xffffffff if random else seed
 
 
 def split_bytes(v, n, endianness="big"):
-    r = []
     r_bytes = v.to_bytes(n, byteorder=endianness)
-    for byte in r_bytes:
-        r.append(int(byte))
-    return r
+    return [int(byte) for byte in r_bytes]
 
 
 def merge_bytes(b, endianness="big"):
@@ -65,11 +59,7 @@ def get_field_data(field, datas):
 
 
 def comp(p1, p2):
-    r = True
-    for x, y in zip(p1, p2):
-        if x != y:
-            r = False
-    return r
+    return all(x == y for x, y in zip(p1, p2))
 
 
 def check(p1, p2):
@@ -77,21 +67,14 @@ def check(p1, p2):
     p2 = deepcopy(p2)
     if isinstance(p1, int):
         return 0, 1, int(p1 != p2)
-    else:
-        if len(p1) >= len(p2):
-            ref, res = p1, p2
-        else:
-            ref, res = p2, p1
-        shift = 0
-        while((ref[0] != res[0]) and (len(res) > 1)):
-            res.pop(0)
-            shift += 1
-        length = min(len(ref), len(res))
-        errors = 0
-        for i in range(length):
-            if ref.pop(0) != res.pop(0):
-                errors += 1
-        return shift, length, errors
+    ref, res = (p1, p2) if len(p1) >= len(p2) else (p2, p1)
+    shift = 0
+    while((ref[0] != res[0]) and (len(res) > 1)):
+        res.pop(0)
+        shift += 1
+    length = min(len(ref), len(res))
+    errors = sum(ref.pop(0) != res.pop(0) for _ in range(length))
+    return shift, length, errors
 
 
 def randn(max_n):

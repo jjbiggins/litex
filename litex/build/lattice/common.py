@@ -327,11 +327,10 @@ lattice_NX_special_overrides = {
     DDRTristate:            LatticeNXDDRTristate,
 }
 
-lattice_NX_special_overrides_for_oxide = dict(lattice_NX_special_overrides)
-lattice_NX_special_overrides_for_oxide.update({
-    SDRInput:               LatticeNXSDRInputViaFlipFlop,
-    SDROutput:              LatticeNXSDROutputViaFlipFlop,
-})
+lattice_NX_special_overrides_for_oxide = lattice_NX_special_overrides | {
+    SDRInput: LatticeNXSDRInputViaFlipFlop,
+    SDROutput: LatticeNXSDROutputViaFlipFlop,
+}
 
 # iCE40 AsyncResetSynchronizer ---------------------------------------------------------------------
 

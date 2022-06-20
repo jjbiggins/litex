@@ -24,14 +24,13 @@ class EfinixPlatform(GenericPlatform):
         self.timing_model = self.device[-2:]
         self.device       = self.device[:-2]
         self.iobank_info  = iobank_info
-        if self.device[:2] == "Ti":
-            self.family = "Titanium"
-        else:
-            self.family = "Trion"
-
+        self.family = "Titanium" if self.device[:2] == "Ti" else "Trion"
         if os.getenv("LITEX_ENV_EFINITY", False) == False:
-            msg = "Unable to find or source Efinity toolchain, please either:\n"
-            msg += "- Set LITEX_ENV_EFINITY environment variant to Efinity path.\n"
+            msg = (
+                "Unable to find or source Efinity toolchain, please either:\n"
+                + "- Set LITEX_ENV_EFINITY environment variant to Efinity path.\n"
+            )
+
             msg += "- Or add Efinity toolchain to your $PATH."
             raise OSError(msg)
 
@@ -49,7 +48,7 @@ class EfinixPlatform(GenericPlatform):
 
     def get_verilog(self, *args, special_overrides=dict(), **kwargs):
         so = dict(common.efinix_special_overrides)
-        so.update(special_overrides)
+        so |= special_overrides
         return GenericPlatform.get_verilog(self, *args, special_overrides=so,
             attr_translate=self.toolchain.attr_translate, **kwargs)
 
@@ -81,10 +80,14 @@ class EfinixPlatform(GenericPlatform):
             idx = sig.start
             sig = sig.value
         sc = self.constraint_manager.get_sig_constraints()
-        for s, pins, others, resource in sc:
-            if (s == sig) and (pins[0] != 'X'):
-                    return [pins[idx]]
-        return None
+        return next(
+            (
+                [pins[idx]]
+                for s, pins, others, resource in sc
+                if (s == sig) and (pins[0] != 'X')
+            ),
+            None,
+        )
 
     def get_pin_properties(self, sig):
         ret = []
@@ -129,21 +132,17 @@ class EfinixPlatform(GenericPlatform):
         sc = self.constraint_manager.get_sig_constraints()
         for s, pins, others, resource in sc:
             if s == sig:
-                if resource[2]:
-                    name = resource[0] + "_" + resource[2]
-                    if without_index is False:
-                        name = name + (f"{idx}" if slc else "")
-                    return name
-                else:
+                if not resource[2]:
                     return resource[0] + (f"{idx}" if slc else "")
+                name = f"{resource[0]}_{resource[2]}"
+                if without_index is False:
+                    name = name + (f"{idx}" if slc else "")
+                return name
         return None
 
     def get_sig_constraint(self, sig):
         sc = self.constraint_manager.get_sig_constraints()
-        for s, pins, others, resource in sc:
-            if s == sig:
-                return sc
-        return None
+        return next((sc for s, pins, others, resource in sc if s == sig), None)
 
     def add_iface_io(self, name, size=1):
         self.add_extension([(name, 0, Pins(size))])

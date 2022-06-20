@@ -43,16 +43,13 @@ class SimConfig():
             "interface": interfaces,
         }
         if args:
-            newmod.update({"args": args})
+            newmod["args"] = args
         if tickfirst:
-            newmod.update({"tickfirst": tickfirst})
+            newmod["tickfirst"] = tickfirst
         self.modules.append(newmod)
 
     def has_module(self, name):
-        for module in self.modules:
-            if module["module"] == name:
-                return True
-        return False
+        return any(module["module"] == name for module in self.modules)
 
     def get_json(self):
         assert "clocker" in (m["module"] for m in self.modules), \

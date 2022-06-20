@@ -140,12 +140,15 @@ class S7SystemMonitor(SystemMonitorDRP, AutoCSR):
             0x6 : self.vccbram
         }
         self.sync += [
-                If(self.drdy,
-                    Case(channel, dict(
-                        (k, v.status.eq(self.do >> 4))
-                    for k, v in channels.items()))
-                )
+            If(
+                self.drdy,
+                Case(
+                    channel,
+                    {k: v.status.eq(self.do >> 4) for k, v in channels.items()},
+                ),
+            )
         ]
+
 
         # End of Convertion/Sequence update.
         self.sync += [
@@ -235,12 +238,20 @@ class USFamilySystemMonitor(SystemMonitorDRP, AutoCSR):
 
         # Channels update.
         self.sync += [
-                If(self.drdy,
-                    Case(channel, dict(
-                        (reg_addr, getattr(self, name).status.eq((self.do >> 6) & 0x3ff))
-                    for reg_addr, name, desc in self._channels))
-                )
+            If(
+                self.drdy,
+                Case(
+                    channel,
+                    {
+                        reg_addr: getattr(self, name).status.eq(
+                            (self.do >> 6) & 0x3FF
+                        )
+                        for reg_addr, name, desc in self._channels
+                    },
+                ),
+            )
         ]
+
 
         # End of Convertion/Sequence update.
         self.sync += [
